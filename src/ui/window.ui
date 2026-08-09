@@ -18,6 +18,7 @@
 
             <child type="top">
               <object class="AdwHeaderBar" id="header_bar">
+
                 <child type="end">
                   <object class="GtkMenuButton">
                     <property name="primary">True</property>
@@ -26,17 +27,59 @@
                     <property name="menu-model">primary_menu</property>
                   </object>
                 </child>
+
+                <child type="end">
+                  <object class="GtkBox">
+                    <property name="css-classes">linked</property>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="icon-name">zoom-out-symbolic</property>
+                        <property name="tooltip-text" translatable="yes">Zoom Out</property>
+                        <property name="action-name">win.zoom-out</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="zoom_reset_button">
+                        <property name="tooltip-text" translatable="yes">Reset Zoom</property>
+                        <property name="action-name">win.zoom-reset</property>
+                        <property name="width-request">62</property>
+                        <property name="label">100%</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="icon-name">zoom-in-symbolic</property>
+                        <property name="tooltip-text" translatable="yes">Zoom In</property>
+                        <property name="action-name">win.zoom-in</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
               </object>
             </child>
 
             <property name="content">
-              <!-- Replaced by the palette, canvas and properties panel in phase 5. -->
-              <object class="AdwStatusPage">
-                <property name="icon-name">io.github.fwilhe2.NetworkingLab</property>
-                <property name="title" translatable="yes">Networking Lab</property>
-                <property name="description" translatable="yes">Draw a network topology and compile it into a docker compose file.</property>
+              <object class="GtkScrolledWindow" id="canvas_scroller">
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
               </object>
             </property>
+
+            <!-- SPEC 8.8: one line of feedback for every action. -->
+            <child type="bottom">
+              <object class="GtkBox">
+                <property name="css-classes">toolbar</property>
+                <child>
+                  <object class="GtkLabel" id="status_label">
+                    <property name="xalign">0</property>
+                    <property name="hexpand">True</property>
+                    <property name="ellipsize">end</property>
+                    <property name="css-classes">dim-label caption</property>
+                  </object>
+                </child>
+              </object>
+            </child>
 
           </object>
         </property>

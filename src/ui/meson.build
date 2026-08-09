@@ -2,6 +2,7 @@ networking_lab_sources = files(
   'main.vala',
   'application.vala',
   'window.vala',
+  'canvas.vala',
   'preferences-dialog.vala',
 )
 
