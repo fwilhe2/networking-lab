@@ -3,9 +3,14 @@
 
 netlab_core_sources = files(
   'model.vala',
+  'ipv4.vala',
+  'names.vala',
+  'geometry.vala',
 )
 
 netlab_core_deps = [
+  # GLib.Math maps straight onto libm, which is not pulled in implicitly.
+  meson.get_compiler('c').find_library('m', required: false),
   dependency('glib-2.0',      version: '>= 2.72'),
   dependency('gobject-2.0',   version: '>= 2.72'),
   dependency('gio-2.0',       version: '>= 2.72'),

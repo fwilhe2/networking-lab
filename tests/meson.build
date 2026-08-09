@@ -3,6 +3,9 @@
 
 core_tests = [
   'model',
+  'ipv4',
+  'names',
+  'geometry',
 ]
 
 foreach name : core_tests
