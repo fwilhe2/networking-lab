@@ -5,6 +5,12 @@ implementation (a single dependency-free `index.html`) to this repository as a n
 Vala + GTK 4 + libadwaita application. `SPEC.md` in that repository is the contract; its
 `docs/demo.docker-compose.yml` is the byte-level fixture that proves the port correct.
 
+Phases 0–8 are the port. **Phase 9 goes beyond the spec**: the reference app stops at
+producing a compose file and leaves running it to a terminal you open yourself, whereas
+this app should boot the lab, show what is running, and give you a CLI on a router without
+leaving the window. Keeping that last means the port can be finished and verified against
+the fixture before anything depends on docker being installed.
+
 ## The one structural rule
 
 SPEC §1 and §11 require the compiler to be a pure function `state → { yaml, warnings }`,
@@ -13,13 +19,18 @@ target**, not merely a separate file:
 
 | Target | Dependencies |
 | --- | --- |
-| `src/core/` — static library | glib, gobject, gio, json-glib. **No GTK** |
-| `src/ui/` — the application | core + gtk4 + libadwaita |
+| `src/core/` — static library | glib, gobject, gio, json-glib. **No GTK, and no I/O** |
+| `src/lab/` — static library (phase 9) | core + gio subprocesses. **No GTK** |
+| `src/ui/` — the application | core + lab + gtk4 + libadwaita + vte |
 | `src/cli/` — `netlab-compile` | core only; stdin JSON → stdout YAML |
-| `tests/` — unit tests | core only |
+| `tests/` — unit tests | core, and lab against a stub `docker` |
 
 Nothing under `src/core/` may `using Gtk`. Enforce it from Phase 0; it is what keeps the
 golden-file test possible and the compiler re-implementable.
+
+Phase 9 adds a second rule alongside it: `src/core/` stays *pure* — no subprocesses, no
+filesystem, no clock. Everything that touches the outside world lives in `src/lab/`, which
+is still GTK-free and so still testable from a plain test binary.
 
 The CLI target is small and pays for itself immediately: it makes the golden-file
 comparison a shell one-liner and gives the lab a headless path.
@@ -38,8 +49,15 @@ src/core/
   compile.vala     text emission (§6)
   demo.vala        the §9 topology as a constant
 
+src/lab/                 phase 9 — the outside world, still GTK-free
+  paths.vala             where a lab's compose file lives
+  docker.vala            locating docker, running a subcommand
+  compose.vala           up / down / ps / logs
+  session.vala           lifecycle and per-device status
+
 src/ui/
   window.vala            header, mode buttons, status bar, wiring
+  terminal.vala          phase 9 — VTE terminal onto a container
   canvas.vala            Gtk.DrawingArea + Cairo: draw, zoom, hit-test, gestures
   palette.vala           four Gtk.DragSource items
   properties.vala        the context-sensitive panel (§8.4)
@@ -150,6 +168,97 @@ converge, assert `pc1 → 10.0.2.10` answers, both r1 interfaces are addressed, 
 neighbour is `Full`, and `ping 1.1.1.1` **fails** (isolation). Requires docker, so it
 stays out of the default `meson test` run.
 
+### Phase 9 — run the lab from the app
+
+Everything up to here reproduces SPEC, which stops at "produce a compose file"; the
+running, the `docker exec`, the `vtysh` session are left to a terminal the user opens
+themselves. Phase 9 goes beyond the spec: the app becomes the thing you *run* the lab
+from, so a topology can be drawn, booted, logged into and reconfigured without leaving
+the window.
+
+This is deliberately the last phase. It is the only part that depends on the host having
+docker, it is the only part that cannot be verified by comparing bytes, and none of the
+earlier phases should have to know it exists.
+
+#### What "running it" means
+
+| Capability | Shape |
+| --- | --- |
+| Boot and tear down | `docker compose up -d` / `down`, against a generated file on disk |
+| Know what is running | Poll `docker compose ps --format json`, per container |
+| Show it on the drawing | Running devices marked on the canvas, so the picture matches reality |
+| Get a CLI | Embedded VTE terminal running `docker exec -it <name> vtysh` or `… sh` |
+| Reach a device quickly | Double-click a device to open its terminal |
+| See what the lab is doing | Streamed `docker compose logs -f`, and the boot output while it starts |
+
+#### 9.1 — the lab layer
+
+New GTK-free static library `src/lab/`:
+
+```
+src/lab/paths.vala      where a lab's compose file and state live
+src/lab/docker.vala     locating docker, running a subcommand, capturing output
+src/lab/compose.vala    up / down / ps / logs, and parsing `ps --format json`
+src/lab/session.vala    lifecycle: DOWN → STARTING → UP → STOPPING, plus per-device status
+```
+
+`session.vala` is a state machine over asynchronous `GSubprocess` calls; nothing may block
+the main loop, because `up` on a cold cache pulls images and takes minutes.
+
+A lab is written to `$XDG_DATA_HOME/networking-lab/labs/<projectName>/docker-compose.yml`.
+The compose `name:` is the docker compose project name, so `docker compose -p <name>` is
+what addresses an already-running lab — including one this app did not start.
+
+*Gate:* with a stub `docker` earlier on `PATH` that records its arguments and replays
+canned `ps` output, unit tests drive the whole lifecycle: up, ps parsing, partial start,
+down, and docker being absent entirely. No real containers, so it runs in CI.
+
+#### 9.2 — run controls
+
+A Run/Stop control in the header, lab state in the status bar, and per-device running
+marks on the canvas. Failure output surfaces in a dialog rather than being swallowed.
+
+Two judgement calls, both departures from "warnings never block":
+
+- **Validation errors block booting, behind a confirmation.** SPEC §5 is explicit that
+  warnings never block *generation*, and that stays true. Booting is different: a lab with
+  a duplicate address or an unreachable gateway wastes a minute of the user's time and
+  then fails confusingly. Offer "Start anyway".
+- **`down` asks before removing.** It destroys containers and networks, including any
+  configuration made through `vtysh` that was not saved.
+
+*Gate:* the demo topology boots and stops from the UI on a machine with docker.
+
+#### 9.3 — the terminal
+
+`src/ui/terminal.vala` wraps `VteTerminal` (pkg-config `vte-2.91-gtk4`, Debian
+`libvte-2.91-gtk4-dev`). A device's terminal spawns `docker exec -it <name> vtysh` for a
+router and `docker exec -it <name> sh` for a host — the same commands the properties panel
+already shows, which is the point: nothing new to learn, just somewhere to run it.
+
+Terminals open in a tabbed pane beside the canvas, one per device, and survive selection
+changes so a session is not lost by clicking elsewhere. A terminal whose container has
+gone reports it rather than sitting dead.
+
+*Gate:* boot the demo, open r1's terminal, run `show ip route` and see OSPF routes.
+
+#### 9.4 — convenience
+
+Double-click a device to open its terminal. A "Router CLI" / "Shell" action in the
+properties panel. Streamed logs for a selected device. Optionally a ping helper between
+two devices, which is the first thing anyone does in a lab.
+
+#### 9.5 — packaging honesty
+
+The Flatpak cannot reach the docker socket from inside its sandbox, and should not be
+given blanket access to it — a hole to the docker socket is a hole to root on the host.
+The options, in preference order: detect the sandbox and disable the run controls with an
+explanation; or use the portal to spawn on the host. Whichever is chosen, the Flatpak must
+not silently appear to support running when it does not.
+
+*Gate:* on a machine without docker, and inside the Flatpak, the app still designs and
+generates — the run controls are insensitive and say why.
+
 ## Deliberate divergences from the spec
 
 SPEC.md describes browser behaviour that conflicts with the GNOME HIG in three places.
@@ -174,3 +283,15 @@ The proposed column is the GNOME-side choice.
 - **Interface numbering follows link order** (SPEC §11). Reordering links renumbers
   `eth<i>`. Carried over as-is; making link order explicit in the UI is a possible later
   improvement, not part of this port.
+- **A new dependency has to be added in four places.** Phase 0's json-glib went into
+  `src/core/meson.build` alone and broke CI at configure time, and the container build with
+  it. Phase 9's VTE means editing `.github/workflows/ci.yml`, the `Containerfile` builder
+  *and* runtime stages, and `.devcontainer/Dockerfile`. The runtime package is the one that
+  gets forgotten: a missing shared library does not fail an image build, only the app at
+  launch, so CI would never catch it.
+- **Docker is not a build dependency.** The lab layer locates docker at run time and
+  degrades to "designer only" when it is absent. Nothing in the default `meson test` run
+  may require a container, or the suite stops being runnable in CI.
+- **`docker compose` is v2-plugin syntax**, not `docker-compose`. The generated file
+  already requires ≥ 2.23.1 for inline `configs.content`; the runner should check the
+  version it found and say so plainly rather than failing in the middle of `up`.
