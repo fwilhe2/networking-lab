@@ -11,6 +11,96 @@
     <property name="width-request">360</property>
     <property name="height-request">294</property>
 
+
+    <!--
+      Declared here rather than through set_accels_for_action: a focused entry
+      consumes plain keys first, which is exactly the suppression SPEC 8.6 asks
+      for while typing.
+    -->
+    <child>
+      <object class="GtkShortcutController">
+        <property name="scope">managed</property>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;z</property>
+            <property name="action">action(win.undo)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;&lt;shift&gt;z</property>
+            <property name="action">action(win.redo)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;y</property>
+            <property name="action">action(win.redo)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;d</property>
+            <property name="action">action(win.duplicate)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">Delete</property>
+            <property name="action">action(win.delete-selection)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">BackSpace</property>
+            <property name="action">action(win.delete-selection)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;plus</property>
+            <property name="action">action(win.zoom-in)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;equal</property>
+            <property name="action">action(win.zoom-in)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;minus</property>
+            <property name="action">action(win.zoom-out)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">&lt;primary&gt;0</property>
+            <property name="action">action(win.zoom-reset)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">v</property>
+            <property name="action">action(win.select-mode)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">l</property>
+            <property name="action">action(win.link-mode)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">Escape</property>
+            <property name="action">action(win.cancel)</property>
+          </object>
+        </child>
+      </object>
+    </child>
+
     <property name="content">
       <object class="AdwToastOverlay" id="toast_overlay">
         <property name="child">
@@ -18,6 +108,45 @@
 
             <child type="top">
               <object class="AdwHeaderBar" id="header_bar">
+
+                <child type="start">
+                  <object class="GtkBox">
+                    <property name="css-classes">linked</property>
+                    <child>
+                      <object class="GtkToggleButton" id="select_mode_button">
+                        <property name="icon-name">pointer-primary-click-symbolic</property>
+                        <property name="tooltip-text" translatable="yes">Select (V)</property>
+                        <property name="active">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkToggleButton" id="link_mode_button">
+                        <property name="icon-name">insert-link-symbolic</property>
+                        <property name="tooltip-text" translatable="yes">Add Link (L)</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child type="start">
+                  <object class="GtkBox">
+                    <property name="css-classes">linked</property>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="icon-name">edit-undo-symbolic</property>
+                        <property name="tooltip-text" translatable="yes">Undo</property>
+                        <property name="action-name">win.undo</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="icon-name">edit-redo-symbolic</property>
+                        <property name="tooltip-text" translatable="yes">Redo</property>
+                        <property name="action-name">win.redo</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
 
                 <child type="end">
                   <object class="GtkMenuButton">
@@ -60,9 +189,15 @@
             </child>
 
             <property name="content">
-              <object class="GtkScrolledWindow" id="canvas_scroller">
-                <property name="hexpand">True</property>
-                <property name="vexpand">True</property>
+              <!-- palette | canvas | properties; made adaptive in phase 7 -->
+              <object class="GtkBox" id="columns">
+                <property name="orientation">horizontal</property>
+                <child>
+                  <object class="GtkScrolledWindow" id="canvas_scroller">
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                  </object>
+                </child>
               </object>
             </property>
 
@@ -89,6 +224,16 @@
 
   <!-- HIG: the primary menu holds app-level, not view-level, items. -->
   <menu id="primary_menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Load _Demo</attribute>
+        <attribute name="action">win.load-demo</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Clear</attribute>
+        <attribute name="action">win.clear</attribute>
+      </item>
+    </section>
     <section>
       <item>
         <attribute name="label" translatable="yes">_Preferences</attribute>

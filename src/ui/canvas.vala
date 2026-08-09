@@ -4,7 +4,8 @@
  * every change: at this scale a diffing renderer buys nothing, and the code
  * stays a direct reading of the document.
  *
- * Read-only for now — selection, dragging and linking arrive in phase 6.
+ * Hit testing is done against the same coordinates the drawing uses, so what
+ * can be clicked is exactly what can be seen.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -16,13 +17,14 @@ namespace NetworkingLab {
     /* The canvas palette. The reference implementation ships two token sets and
      * a manual toggle; here they follow the system through AdwStyleManager, as
      * the HIG asks. See PLAN.md for that divergence. */
-    private struct Palette {
+    private struct CanvasColors {
         Gdk.RGBA background;
         Gdk.RGBA surface;
         Gdk.RGBA grid;
         Gdk.RGBA text;
         Gdk.RGBA muted;
         Gdk.RGBA link;
+        Gdk.RGBA accent;
         Gdk.RGBA router;
         Gdk.RGBA switch_;
         Gdk.RGBA pc;
@@ -34,20 +36,22 @@ namespace NetworkingLab {
             return color;
         }
 
-        public static Palette for_theme (bool dark) {
+        public static CanvasColors for_theme (bool dark) {
             if (dark) {
-                return Palette () {
+                return CanvasColors () {
                     background = rgb ("#16191d"), surface = rgb ("#1b1f24"),
                     grid = rgb ("#22272e"), text = rgb ("#e6e9ee"), muted = rgb ("#9aa3ae"),
-                    link = rgb ("#5c6672"), router = rgb ("#4d8fe0"), switch_ = rgb ("#4fae86"),
+                    link = rgb ("#5c6672"), accent = rgb ("#4d8fe0"),
+                    router = rgb ("#4d8fe0"), switch_ = rgb ("#4fae86"),
                     pc = rgb ("#98a2b0"), server = rgb ("#a98ad6"),
                 };
             }
 
-            return Palette () {
+            return CanvasColors () {
                 background = rgb ("#ffffff"), surface = rgb ("#ffffff"),
                 grid = rgb ("#edeff2"), text = rgb ("#1b1e23"), muted = rgb ("#6a717b"),
-                link = rgb ("#9aa2ac"), router = rgb ("#2c6bbd"), switch_ = rgb ("#2f7d5d"),
+                link = rgb ("#9aa2ac"), accent = rgb ("#2c6bbd"),
+                router = rgb ("#2c6bbd"), switch_ = rgb ("#2f7d5d"),
                 pc = rgb ("#5b6472"), server = rgb ("#7a52a8"),
             };
         }
@@ -64,10 +68,39 @@ namespace NetworkingLab {
 
     public class Canvas : Gtk.DrawingArea {
 
-        private State _state;
-        public State state {
-            get { return _state; }
-            set { _state = value; queue_draw (); }
+        /* Selection ring, pending-link ring and rubber band all use the
+           accent colour, as the reference does. */
+        private const string ACCENT = "#2c6bbd";
+        private const string ACCENT_DARK = "#4d8fe0";
+
+        /* Anything within this of a device centre counts as hitting it; the
+           icons differ in shape but the ring is r=30. */
+        private const double NODE_HIT_RADIUS = 30;
+        /* Links are thin, so they get a generous corridor (the reference draws
+           a transparent 14px hit line under each). */
+        private const double LINK_HIT_DISTANCE = 7;
+
+        public Document document { get; construct; }
+
+        private State topology { get { return document.state; } }
+
+        /* In-flight drag: which device, the grab offset, and where it began. */
+        private string drag_id = "";
+        private double drag_dx;
+        private double drag_dy;
+        private double drag_from_x;
+        private double drag_from_y;
+        private bool dragging = false;
+
+        /* Cursor position in canvas coordinates, for the rubber band. */
+        private double pointer_x;
+        private double pointer_y;
+
+        /* Set while Alt is held, to place a device off the grid. */
+        private bool free_placement = false;
+
+        public Canvas (Document document) {
+            Object (document: document);
         }
 
         private double _zoom = 1.0;
@@ -83,15 +116,220 @@ namespace NetworkingLab {
         }
 
         construct {
-            _state = new State ();
-
             set_content_width (CANVAS_WIDTH);
             set_content_height (CANVAS_HEIGHT);
             set_draw_func (draw);
+            focusable = true;
 
             /* Follow the system light/dark preference. */
             Adw.StyleManager.get_default ().notify["dark"].connect (queue_draw);
+
+            document.changed.connect (queue_draw);
+
+            var click = new Gtk.GestureClick ();
+            click.set_button (Gdk.BUTTON_PRIMARY);
+            click.pressed.connect (on_pressed);
+            click.released.connect (on_released);
+            add_controller (click);
+
+            var motion = new Gtk.EventControllerMotion ();
+            motion.motion.connect (on_motion);
+            add_controller (motion);
+
+            /* Ctrl+wheel zooms; a plain wheel is left to the scrolled window. */
+            var scroll = new Gtk.EventControllerScroll (Gtk.EventControllerScrollFlags.VERTICAL);
+            scroll.scroll.connect (on_scroll);
+            add_controller (scroll);
+
+            var keys = new Gtk.EventControllerKey ();
+            keys.key_pressed.connect (on_key_pressed);
+            keys.key_released.connect (on_key_released);
+            add_controller (keys);
+
+            var drop = new Gtk.DropTarget (typeof (string), Gdk.DragAction.COPY);
+            drop.drop.connect (on_drop);
+            add_controller (drop);
         }
+
+        /* ── input ──────────────────────────────────────────────────── */
+
+        /* Widget coordinates are scaled by the zoom; the document is not. */
+        private double to_canvas (double v) {
+            return v / _zoom;
+        }
+
+        private void on_pressed (Gtk.GestureClick gesture, int n_press, double wx, double wy) {
+            grab_focus ();
+
+            var x = to_canvas (wx);
+            var y = to_canvas (wy);
+            var modifiers = gesture.get_current_event_state ();
+            free_placement = (modifiers & Gdk.ModifierType.ALT_MASK) != 0;
+
+            var node = node_at (x, y);
+            if (node != null) {
+                var linking = link_mode || (modifiers & Gdk.ModifierType.SHIFT_MASK) != 0;
+                if (linking) {
+                    continue_link (node);
+                    return;
+                }
+
+                document.select_node (node.id);
+                drag_id = node.id;
+                drag_dx = node.x - x;
+                drag_dy = node.y - y;
+                drag_from_x = node.x;
+                drag_from_y = node.y;
+                dragging = false;
+                return;
+            }
+
+            var link = link_at (x, y);
+            if (link != null) {
+                document.select_link (link.id);
+                return;
+            }
+
+            /* Empty canvas cancels a pending link, or clears the selection. */
+            if (!document.cancel_link ()) {
+                document.clear_selection ();
+            }
+        }
+
+        private void continue_link (Core.Node node) {
+            if (document.pending_link == "") {
+                document.begin_link (node.id);
+                document.report (_("Linking from %s — click the second device (Esc to cancel).")
+                                 .printf (node.name));
+                return;
+            }
+
+            if (document.pending_link == node.id) {
+                return;
+            }
+
+            var from = document.pending_link;
+            document.begin_link ("");
+            document.connect_devices (from, node.id);
+        }
+
+        private void on_motion (double wx, double wy) {
+            pointer_x = to_canvas (wx);
+            pointer_y = to_canvas (wy);
+
+            if (drag_id != "") {
+                dragging = true;
+                move_node (topology, drag_id, pointer_x + drag_dx, pointer_y + drag_dy, free_placement);
+                queue_draw ();
+            } else if (document.pending_link != "") {
+                queue_draw ();
+            }
+        }
+
+        private void on_released (Gtk.GestureClick gesture, int n_press, double x, double y) {
+            if (drag_id != "" && dragging) {
+                document.commit_drag (drag_id, drag_from_x, drag_from_y);
+            }
+            drag_id = "";
+            dragging = false;
+        }
+
+        private bool on_scroll (Gtk.EventControllerScroll controller, double dx, double dy) {
+            if ((controller.get_current_event_state () & Gdk.ModifierType.CONTROL_MASK) == 0) {
+                return false;
+            }
+            if (dy < 0) {
+                zoom_in ();
+            } else if (dy > 0) {
+                zoom_out ();
+            }
+            return true;
+        }
+
+        private bool on_key_pressed (uint keyval, uint keycode, Gdk.ModifierType state) {
+            if (keyval == Gdk.Key.Alt_L || keyval == Gdk.Key.Alt_R) {
+                free_placement = true;
+                return false;
+            }
+
+            if ((state & Gdk.ModifierType.CONTROL_MASK) != 0) {
+                return false;
+            }
+
+            var big = (state & Gdk.ModifierType.SHIFT_MASK) != 0;
+            switch (keyval) {
+                case Gdk.Key.Left:  document.nudge_selection (-1, 0, big); return true;
+                case Gdk.Key.Right: document.nudge_selection (1, 0, big);  return true;
+                case Gdk.Key.Up:    document.nudge_selection (0, -1, big); return true;
+                case Gdk.Key.Down:  document.nudge_selection (0, 1, big);  return true;
+                default: return false;
+            }
+        }
+
+        private void on_key_released (uint keyval, uint keycode, Gdk.ModifierType state) {
+            if (keyval == Gdk.Key.Alt_L || keyval == Gdk.Key.Alt_R) {
+                free_placement = false;
+            }
+        }
+
+        private bool on_drop (Value value, double wx, double wy) {
+            DeviceType type;
+            if (!DeviceType.try_parse (value.get_string (), out type)) {
+                return false;
+            }
+            document.add_device (type, to_canvas (wx), to_canvas (wy));
+            return true;
+        }
+
+        /* ── hit testing ────────────────────────────────────────────── */
+
+        private Core.Node? node_at (double x, double y) {
+            /* Last drawn is topmost, so search backwards. */
+            for (var i = topology.nodes.length - 1; i >= 0; i--) {
+                var node = topology.nodes[i];
+                var dx = node.x - x;
+                var dy = node.y - y;
+                if (dx * dx + dy * dy <= NODE_HIT_RADIUS * NODE_HIT_RADIUS) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        private Link? link_at (double x, double y) {
+            for (var i = topology.links.length - 1; i >= 0; i--) {
+                var link = topology.links[i];
+                var a = topology.node_by_id (link.a);
+                var b = topology.node_by_id (link.b);
+                if (a == null || b == null) {
+                    continue;
+                }
+                if (distance_to_segment (x, y, a.x, a.y, b.x, b.y) <= LINK_HIT_DISTANCE) {
+                    return link;
+                }
+            }
+            return null;
+        }
+
+        private double distance_to_segment (double px, double py,
+                                            double ax, double ay, double bx, double by) {
+            var vx = bx - ax;
+            var vy = by - ay;
+            var length_squared = vx * vx + vy * vy;
+
+            /* Coincident endpoints: the segment is a point. */
+            var t = length_squared == 0 ? 0
+                  : ((px - ax) * vx + (py - ay) * vy) / length_squared;
+            t = double.max (0, double.min (1, t));
+
+            var cx = ax + t * vx;
+            var cy = ay + t * vy;
+            return Math.sqrt ((px - cx) * (px - cx) + (py - cy) * (py - cy));
+        }
+
+        /* Add-link mode: plain clicks connect devices and the mode persists,
+         * so several links can be drawn in a row. */
+        public bool link_mode { get; set; default = false; }
 
         /* ── zoom ───────────────────────────────────────────────────── */
 
@@ -124,7 +362,7 @@ namespace NetworkingLab {
         /* ── drawing ────────────────────────────────────────────────── */
 
         private void draw (Gtk.DrawingArea area, Cairo.Context cr, int width, int height) {
-            var palette = Palette.for_theme (Adw.StyleManager.get_default ().dark);
+            var palette = CanvasColors.for_theme (Adw.StyleManager.get_default ().dark);
 
             set_source (cr, palette.background);
             cr.paint ();
@@ -133,10 +371,11 @@ namespace NetworkingLab {
 
             draw_grid (cr, palette);
             draw_links (cr, palette);
+            draw_pending_link (cr, palette);
             draw_nodes (cr, palette);
         }
 
-        private void draw_grid (Cairo.Context cr, Palette palette) {
+        private void draw_grid (Cairo.Context cr, CanvasColors palette) {
             set_source (cr, palette.grid);
             cr.set_line_width (1.0 / _zoom);
 
@@ -151,17 +390,20 @@ namespace NetworkingLab {
             cr.stroke ();
         }
 
-        private void draw_links (Cairo.Context cr, Palette palette) {
-            for (var i = 0; i < _state.links.length; i++) {
-                var link = _state.links[i];
-                var a = _state.node_by_id (link.a);
-                var b = _state.node_by_id (link.b);
+        private void draw_links (Cairo.Context cr, CanvasColors palette) {
+            for (var i = 0; i < topology.links.length; i++) {
+                var link = topology.links[i];
+                var a = topology.node_by_id (link.a);
+                var b = topology.node_by_id (link.b);
                 if (a == null || b == null) {
                     continue;
                 }
 
-                set_source (cr, palette.link);
-                cr.set_line_width (1.75);
+                var selected = document.selection_kind == SelectionKind.LINK
+                            && document.selection_id == link.id;
+
+                set_source (cr, selected ? palette.accent : palette.link);
+                cr.set_line_width (selected ? 4 : 1.75);
                 cr.move_to (a.x, a.y);
                 cr.line_to (b.x, b.y);
                 cr.stroke ();
@@ -173,7 +415,7 @@ namespace NetworkingLab {
             }
         }
 
-        private void draw_endpoint_label (Cairo.Context cr, Palette palette,
+        private void draw_endpoint_label (Cairo.Context cr, CanvasColors palette,
                                           Core.Node a, Core.Node b, Link link,
                                           string end_id, double t) {
             var ip = link.ip_for (end_id);
@@ -188,9 +430,34 @@ namespace NetworkingLab {
             draw_centred_text (cr, "." + octets[octets.length - 1], x, y - 6, 10.5, palette.muted);
         }
 
-        private void draw_nodes (Cairo.Context cr, Palette palette) {
-            for (var i = 0; i < _state.nodes.length; i++) {
-                var node = _state.nodes[i];
+        /* The rubber band from the first device to the cursor. */
+        private void draw_pending_link (Cairo.Context cr, CanvasColors palette) {
+            if (document.pending_link == "") {
+                return;
+            }
+
+            var from = topology.node_by_id (document.pending_link);
+            if (from == null) {
+                return;
+            }
+
+            /* The dash pattern is part of the graphics state, so save/restore
+               puts it back without allocating an empty pattern. */
+            cr.save ();
+            set_source (cr, palette.accent);
+            cr.set_line_width (1.75);
+            cr.set_dash (new double[] { 5, 4 }, 0);
+            cr.move_to (from.x, from.y);
+            cr.line_to (pointer_x, pointer_y);
+            cr.stroke ();
+            cr.restore ();
+        }
+
+        private void draw_nodes (Cairo.Context cr, CanvasColors palette) {
+            for (var i = 0; i < topology.nodes.length; i++) {
+                var node = topology.nodes[i];
+
+                draw_rings (cr, palette, node);
 
                 cr.save ();
                 cr.translate (node.x, node.y);
@@ -207,7 +474,30 @@ namespace NetworkingLab {
             }
         }
 
-        private void draw_icon (Cairo.Context cr, Palette palette, Core.Node node) {
+        /* A solid ring marks the selection; a dashed one marks the device a
+         * link is being drawn from. */
+        private void draw_rings (Cairo.Context cr, CanvasColors palette, Core.Node node) {
+            var selected = document.selection_kind == SelectionKind.NODE
+                        && document.selection_id == node.id;
+            var pending = document.pending_link == node.id;
+
+            if (!selected && !pending) {
+                return;
+            }
+
+            cr.save ();
+            set_source (cr, palette.accent);
+            cr.set_line_width (1.75);
+            if (pending) {
+                cr.set_dash (new double[] { 4, 4 }, 0);
+            }
+            cr.new_sub_path ();
+            cr.arc (node.x, node.y, 30, 0, 2 * Math.PI);
+            cr.stroke ();
+            cr.restore ();
+        }
+
+        private void draw_icon (Cairo.Context cr, CanvasColors palette, Core.Node node) {
             var color = palette.for_device (node.device_type);
 
             switch (node.device_type) {

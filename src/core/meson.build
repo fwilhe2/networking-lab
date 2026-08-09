@@ -12,6 +12,7 @@ netlab_core_sources = files(
   'derive.vala',
   'validate.vala',
   'demo.vala',
+  'edit.vala',
   'compile.vala',
 )
 

@@ -55,6 +55,46 @@ namespace NetworkingLab.Core {
         return state;
     }
 
+    /* Undo snapshots are written by the application itself, so their counters
+     * are trustworthy — and have to be honoured, because ids are never reused:
+     * a document holding only n3 after n7 was deleted must still mint n8. The
+     * rebuilt value is the floor, the recorded one can only raise it. */
+    public State restore_snapshot (string text) throws TopologyError, Error {
+        var state = normalize_json (text);
+
+        var parser = new Json.Parser ();
+        parser.load_from_data (text, -1);
+        var root = parser.get_root ().get_object ();
+        if (!root.has_member ("counters")
+            || root.get_member ("counters").get_node_type () != Json.NodeType.OBJECT) {
+            return state;
+        }
+
+        var recorded = root.get_object_member ("counters");
+        state.counters.node = int.max (state.counters.node, counter_member (recorded, "node"));
+        state.counters.link = int.max (state.counters.link, counter_member (recorded, "link"));
+        state.counters.subnet = int.max (state.counters.subnet, counter_member (recorded, "subnet"));
+
+        foreach (var type in new DeviceType[] { DeviceType.ROUTER, DeviceType.SWITCH,
+                                                DeviceType.PC, DeviceType.SERVER }) {
+            state.counters.set_for_type (type, int.max (state.counters.for_type (type),
+                                                        counter_member (recorded, type.id ())));
+        }
+
+        return state;
+    }
+
+    private int counter_member (Json.Object counters, string name) {
+        if (!counters.has_member (name)) {
+            return 0;
+        }
+        var member = counters.get_member (name);
+        if (member.get_node_type () != Json.NodeType.VALUE || member.get_value_type () != typeof (int64)) {
+            return 0;
+        }
+        return (int) member.get_int ();
+    }
+
     public State normalize_json (string text) throws TopologyError, Error {
         var parser = new Json.Parser ();
         try {

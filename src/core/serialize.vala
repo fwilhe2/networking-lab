@@ -50,14 +50,14 @@ namespace NetworkingLab.Core {
         builder.set_member_name ("nodes");
         builder.begin_array ();
         for (var i = 0; i < state.nodes.length; i++) {
-            add_node (builder, state.nodes[i]);
+            write_node (builder, state.nodes[i]);
         }
         builder.end_array ();
 
         builder.set_member_name ("links");
         builder.begin_array ();
         for (var i = 0; i < state.links.length; i++) {
-            add_link (builder, state, state.links[i]);
+            write_link (builder, state, state.links[i]);
         }
         builder.end_array ();
 
@@ -70,7 +70,7 @@ namespace NetworkingLab.Core {
         return generator.to_data (null);
     }
 
-    private void add_node (Json.Builder builder, Node node) {
+    private void write_node (Json.Builder builder, Node node) {
         builder.begin_object ();
 
         builder.set_member_name ("id");
@@ -109,7 +109,7 @@ namespace NetworkingLab.Core {
         builder.end_object ();
     }
 
-    private void add_link (Json.Builder builder, State state, Link link) {
+    private void write_link (Json.Builder builder, State state, Link link) {
         builder.begin_object ();
 
         builder.set_member_name ("id");

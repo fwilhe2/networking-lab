@@ -10,6 +10,7 @@ core_tests = [
   'derive',
   'validate',
   'compile',
+  'edit',
 ]
 
 foreach name : core_tests
