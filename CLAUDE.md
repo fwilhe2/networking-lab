@@ -114,6 +114,29 @@ const-correctness artifacts of generated code, not defects in the Vala source. E
 generated-code warning is already suppressed in the root `meson.build`. Treat these four as
 baseline, not regressions.
 
+## Driving the UI
+
+`tools/run-app.sh --x11 &` then `tools/drive.py <scenario>` clicks the canvas over
+XTEST and screenshots the window. The canvas is a single Cairo-drawn widget, so no
+part of it is reachable through the accessibility tree — coordinates are the only
+handle. Three things there are not obvious, and each cost real time before it was
+understood:
+
+- **`import` takes the input focus with it.** Every synthetic event after a
+  screenshot lands somewhere else unless the focus is restored, which makes a
+  perfectly good interaction look broken.
+- **GApplication is single-instance.** Launching while an older process is still
+  registered re-presents the *old* window, so you end up checking a change against
+  the previous binary. `run-app.sh` kills it first.
+- **`pkill -f networking-lab` matches the shell running it** and kills your own
+  session. Use `pkill -x networking-lab`.
+
+Layout bugs in particular only show up on screen: `hexpand` propagates *up* from
+children unless set explicitly, a `GtkCheckButton`'s own label does not wrap so its
+minimum width becomes the panel's, and a `GtkScrolledWindow` with `hscrollbar-policy:
+NEVER` adopts its child's full natural width. All three squeezed the canvas out of
+the window at some point.
+
 ## Runtime notes
 
 - `meson devenv` is required to run uninstalled — it puts the compiled schema on the

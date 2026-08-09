@@ -80,6 +80,27 @@ Some details worth knowing before you change the setup:
 To use Podman instead of Docker, point the extension at it with
 `"dev.containers.dockerPath": "podman"` in your user settings.
 
+### Driving the app for a visual check
+
+The canvas is one Cairo-drawn widget, so nothing inside it is reachable through
+the accessibility tree — checking that a selection ring lands on the right
+device, or that the rubber band follows the cursor, means clicking coordinates
+and looking at the result.
+
+```sh
+tools/run-app.sh --x11 &
+tools/drive.py --out /tmp/shots select drag link refuse
+```
+
+`tools/run-app.sh` puts the compiled GSettings schema on the path and stops any
+instance still running — GApplication is single-instance, so without that a
+second launch just re-presents the old window and you end up testing the
+previous binary. `--x11` forces the X11 backend, which is what gives the window
+an id to screenshot.
+
+`tools/drive.py` needs `python3-xlib` and ImageMagick's `import`. Run it with
+`--help` for the list of scenarios.
+
 ### Flatpak
 
 ```sh
@@ -172,6 +193,9 @@ data/
   *.gschema.xml                 GSettings schema
   icons/hicolor/...             app icon and symbolic icon
 po/                             translation infrastructure
+tools/
+  run-app.sh                    run from the build tree, schema path and all
+  drive.py                      drive the window over XTEST, screenshot it
 io.github.fwilhe2.NetworkingLab.json
                                 Flatpak manifest
 Containerfile                   multi-stage container build
