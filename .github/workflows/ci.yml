@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test (Debian trixie)
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+    steps:
+      # Installed before checkout so actions/checkout can use real git rather
+      # than falling back to a tarball download.
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential valac meson ninja-build pkg-config \
+            libglib2.0-dev libglib2.0-dev-bin \
+            libgtk-4-dev libadwaita-1-dev \
+            gettext desktop-file-utils appstream \
+            git ca-certificates
+
+      - uses: actions/checkout@v7
+
+      - name: Configure
+        run: meson setup _build --prefix=/usr
+
+      - name: Compile
+        run: meson compile -C _build
+
+      # Validates the desktop entry, the AppStream metadata and the GSettings schema.
+      - name: Test
+        run: meson test -C _build --print-errorlogs
+
+      - name: Staged install
+        run: meson install -C _build --destdir=/tmp/stage
+
+      - name: Upload Meson logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: meson-logs
+          path: _build/meson-logs/
+          if-no-files-found: ignore
+
+  flatpak:
+    name: Flatpak (GNOME 50)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Two packages that --no-install-recommends would otherwise leave out, both
+      # needed by post-build steps rather than by the build itself:
+      #   elfutils        - eu-strip, which flatpak-builder uses to split debuginfo
+      #   librsvg2-common - the gdk-pixbuf SVG loader. Without it `appstreamcli
+      #                     compose` cannot rasterise the SVG app icon and fails
+      #                     with a bare "E: file-read-error".
+      - name: Install flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            flatpak flatpak-builder elfutils librsvg2-common
+
+      - name: Add Flathub remote
+        run: |
+          flatpak remote-add --user --if-not-exists \
+            flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install runtime and SDK
+        run: |
+          flatpak install --user -y --noninteractive \
+            flathub org.gnome.Platform//50 org.gnome.Sdk//50
+
+      # rofiles-fuse is unavailable on hosted runners.
+      - name: Build
+        run: |
+          flatpak-builder --user --disable-rofiles-fuse --force-clean \
+            --repo=_repo _flatpak com.example.Starter.json
+
+      - name: Create bundle
+        run: |
+          flatpak build-bundle _repo starter.flatpak com.example.Starter \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: starter-flatpak
+          path: starter.flatpak
+
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # The Containerfile runs `meson test` in its builder stage, so this job
+      # gates on the test suite as well as on the image building.
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Containerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

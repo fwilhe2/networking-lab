@@ -1,0 +1,71 @@
+// Dev container for Starter — Vala + GTK 4 + libadwaita.
+//
+// Requires the "Dev Containers" extension (ms-vscode-remote.remote-containers)
+// and a Linux host running Wayland or X11: the container renders on the host's
+// display server, so the app opens a real window on your desktop.
+//
+// Reopen in container, then F5.
+{
+  "name": "Vala + GTK 4",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+
+  "remoteUser": "vscode",
+
+  "mounts": [
+    // The whole runtime dir, not just the Wayland socket: it also carries the
+    // session bus, the at-spi accessibility bus and PipeWire, so the app behaves
+    // the way it will on a real desktop. Sharing the session bus means GApplication
+    // single-instance rules apply — if the app is already running on the host, a
+    // second launch re-presents that window and exits. Drop the
+    // DBUS_SESSION_BUS_ADDRESS entry below to get an isolated instance.
+    "type=bind,source=${localEnv:XDG_RUNTIME_DIR},target=/run/user/1000",
+    // X11 fallback, and what Xwayland-backed apps use.
+    "type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix",
+    // Keep the build tree inside the container. A _build configured on the host
+    // bakes in host paths and breaks when Meson re-runs under /workspaces, so the
+    // two must not share one directory.
+    "type=volume,source=starter-devcontainer-build,target=${containerWorkspaceFolder}/_build"
+  ],
+
+  "runArgs": [
+    // Hardware GL. Remove this line on a machine with no /dev/dri — Mesa falls
+    // back to software rendering, which is slower but works.
+    "--device=/dev/dri",
+    // SELinux hosts (Fedora, RHEL) otherwise deny access to the mounted sockets.
+    "--security-opt=label=disable",
+    // gdb: ptrace, and the personality() call it uses to turn off ASLR. Without
+    // the seccomp exemption every debug session opens with a warning and runs
+    // with randomised addresses.
+    "--cap-add=SYS_PTRACE",
+    "--security-opt=seccomp=unconfined"
+  ],
+
+  "containerEnv": {
+    "XDG_RUNTIME_DIR": "/run/user/1000",
+    "WAYLAND_DISPLAY": "${localEnv:WAYLAND_DISPLAY}",
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+    "GDK_BACKEND": "wayland,x11",
+    // What `meson devenv` would set. Having it in the environment means the
+    // debugger, the tasks and a plain `_build/src/starter` all find the compiled
+    // GSettings schema; without it the app aborts during window construction.
+    "GSETTINGS_SCHEMA_DIR": "${containerWorkspaceFolder}/_build/data"
+  },
+
+  "postCreateCommand": "./.devcontainer/post-create.sh",
+  "postStartCommand": "./.devcontainer/post-start.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "prince781.vala",
+        "mesonbuild.mesonbuild",
+        "ms-vscode.cpptools"
+      ]
+    }
+  }
+}

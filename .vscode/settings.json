@@ -1,0 +1,44 @@
+{
+    // GTK Builder templates and the GNOME metadata files are all XML.
+    "files.associations": {
+        "*.ui": "xml",
+        "*.gresource.xml": "xml",
+        "*.gschema.xml": "xml",
+        "*.metainfo.xml.in": "xml",
+        "*.desktop.in": "ini"
+    },
+
+    "files.watcherExclude": {
+        "**/_build/**": true,
+        "**/_flatpak/**": true,
+        "**/.flatpak-builder/**": true
+    },
+    "search.exclude": {
+        "_build": true,
+        "_flatpak": true,
+        ".flatpak-builder": true
+    },
+
+    // The Meson extension defaults to a build folder named "builddir".
+    "mesonbuild.buildFolder": "_build",
+    // The dev container configures _build on creation, and the tasks in
+    // tasks.json configure it everywhere else.
+    "mesonbuild.configureOnOpen": false,
+    // Set to true to let the extension fetch mesonlsp for meson.build editing.
+    // Off by default so the container needs no network after it is built.
+    "mesonbuild.downloadLanguageServer": false,
+    // The extension otherwise rewrites the two C_Cpp keys below on load, and
+    // resolves ${workspaceFolder} to an absolute path while doing it — which
+    // then only works on the machine that wrote it.
+    "mesonbuild.modifySettings": false,
+
+    // Points IntelliSense at the C that valac generates. Editing Vala is the
+    // language server's job; this only matters when you go look at the output.
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/_build/compile_commands.json",
+    "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild",
+
+    "[vala]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4
+    }
+}

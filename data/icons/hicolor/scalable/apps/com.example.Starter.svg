@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="8" x2="64" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#1a5fb4"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+
+  <!-- Window body -->
+  <rect x="28" y="40" width="72" height="48" rx="8" fill="#ffffff" opacity=".96"/>
+
+  <!-- Header bar -->
+  <path d="M28 48a8 8 0 0 1 8-8h56a8 8 0 0 1 8 8v6H28z" fill="#1a5fb4"/>
+  <g fill="#ffffff" opacity=".85">
+    <circle cx="38" cy="47" r="2.75"/>
+    <circle cx="47" cy="47" r="2.75"/>
+    <circle cx="56" cy="47" r="2.75"/>
+  </g>
+
+  <!-- Content lines -->
+  <g fill="#1c71d8" opacity=".45">
+    <rect x="38" y="63" width="52" height="6" rx="3"/>
+    <rect x="38" y="74" width="32" height="6" rx="3"/>
+  </g>
+</svg>

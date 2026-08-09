@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.12"/>
+  <requires lib="libadwaita" version="1.5"/>
+
+  <template class="StarterWindow" parent="AdwApplicationWindow">
+    <property name="title" translatable="yes">Starter</property>
+    <property name="default-width">800</property>
+    <property name="default-height">600</property>
+    <!-- HIG: 360x294 is the phone form factor apps should scale down to. -->
+    <property name="width-request">360</property>
+    <property name="height-request">294</property>
+
+    <!--
+      HIG: adaptive layout. Below 550sp the view switcher moves out of the
+      header bar and into a bottom bar, so it stays reachable one-handed.
+    -->
+    <child>
+      <object class="AdwBreakpoint">
+        <condition>max-width: 550sp</condition>
+        <setter object="header_bar" property="title-widget"/>
+        <setter object="switcher_bar" property="reveal">True</setter>
+      </object>
+    </child>
+
+    <property name="content">
+      <object class="AdwToastOverlay" id="toast_overlay">
+        <property name="child">
+          <object class="AdwToolbarView">
+
+            <child type="top">
+              <object class="AdwHeaderBar" id="header_bar">
+                <property name="title-widget">
+                  <object class="AdwViewSwitcher">
+                    <property name="stack">view_stack</property>
+                    <property name="policy">wide</property>
+                  </object>
+                </property>
+                <child type="end">
+                  <object class="GtkMenuButton">
+                    <property name="primary">True</property>
+                    <property name="icon-name">open-menu-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Main Menu</property>
+                    <property name="menu-model">primary_menu</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <property name="content">
+              <object class="AdwViewStack" id="view_stack">
+
+                <child>
+                  <object class="AdwViewStackPage">
+                    <property name="name">home</property>
+                    <property name="title" translatable="yes">Home</property>
+                    <property name="icon-name">go-home-symbolic</property>
+                    <property name="child">
+                      <object class="AdwStatusPage">
+                        <property name="icon-name">com.example.Starter</property>
+                        <property name="title" translatable="yes">Welcome to Starter</property>
+                        <property name="description" translatable="yes">A Vala and GTK 4 application scaffolded with Meson and libadwaita.</property>
+                        <property name="child">
+                          <object class="GtkButton">
+                            <property name="halign">center</property>
+                            <property name="use-underline">True</property>
+                            <property name="label" translatable="yes">_Show a Toast</property>
+                            <property name="action-name">win.show-toast</property>
+                            <style>
+                              <class name="pill"/>
+                              <class name="suggested-action"/>
+                            </style>
+                          </object>
+                        </property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwViewStackPage">
+                    <property name="name">widgets</property>
+                    <property name="title" translatable="yes">Widgets</property>
+                    <property name="icon-name">view-list-symbolic</property>
+                    <property name="child">
+                      <object class="GtkScrolledWindow">
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="child">
+                          <!-- HIG: clamp long-form content so lines stay readable. -->
+                          <object class="AdwClamp">
+                            <property name="margin-top">24</property>
+                            <property name="margin-bottom">24</property>
+                            <property name="margin-start">12</property>
+                            <property name="margin-end">12</property>
+                            <property name="child">
+                              <object class="AdwPreferencesGroup">
+                                <property name="title" translatable="yes">Boxed List</property>
+                                <property name="description" translatable="yes">The standard GNOME pattern for grouped rows.</property>
+
+                                <child>
+                                  <object class="AdwActionRow">
+                                    <property name="title" translatable="yes">Vala Documentation</property>
+                                    <property name="subtitle" translatable="yes">Opens docs.vala.dev in your browser</property>
+                                    <property name="activatable">True</property>
+                                    <property name="action-name">win.open-docs</property>
+                                    <child type="suffix">
+                                      <object class="GtkImage">
+                                        <property name="valign">center</property>
+                                        <property name="icon-name">adw-external-link-symbolic</property>
+                                        <property name="accessible-role">presentation</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+
+                                <child>
+                                  <object class="AdwSwitchRow" id="demo_row">
+                                    <property name="title" translatable="yes">Demo Setting</property>
+                                    <property name="subtitle" translatable="yes">Stored in GSettings and shared with Preferences</property>
+                                  </object>
+                                </child>
+
+                                <child>
+                                  <object class="AdwComboRow">
+                                    <property name="title" translatable="yes">Example Choice</property>
+                                    <property name="model">
+                                      <object class="GtkStringList">
+                                        <items>
+                                          <item translatable="yes">First</item>
+                                          <item translatable="yes">Second</item>
+                                          <item translatable="yes">Third</item>
+                                        </items>
+                                      </object>
+                                    </property>
+                                  </object>
+                                </child>
+
+                              </object>
+                            </property>
+                          </object>
+                        </property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+
+              </object>
+            </property>
+
+            <child type="bottom">
+              <object class="AdwViewSwitcherBar" id="switcher_bar">
+                <property name="stack">view_stack</property>
+              </object>
+            </child>
+
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+
+  <!-- HIG: the primary menu holds app-level, not view-level, items. -->
+  <menu id="primary_menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Preferences</attribute>
+        <attribute name="action">app.preferences</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_About Starter</attribute>
+        <attribute name="action">app.about</attribute>
+      </item>
+    </section>
+  </menu>
+</interface>

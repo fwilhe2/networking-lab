@@ -1,0 +1,13 @@
+{
+    "recommendations": [
+        // Reopening this folder in the dev container needs this one on the host.
+        "ms-vscode-remote.remote-containers",
+        // Vala language support, driven by vala-language-server — the dev
+        // container builds and installs it, since Debian does not package it.
+        "prince781.vala",
+        // Meson targets, tests and build actions in the side bar.
+        "mesonbuild.mesonbuild",
+        // Supplies the cppdbg debug adapter that launch.json drives gdb through.
+        "ms-vscode.cpptools"
+    ]
+}

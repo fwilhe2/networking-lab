@@ -1,0 +1,72 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "meson: configure",
+            "type": "shell",
+            "command": "test -f _build/build.ninja || meson setup _build --buildtype=debug",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "silent", "panel": "shared" },
+            "detail": "Configure _build if it is not configured yet"
+        },
+        {
+            "label": "meson: build",
+            "type": "shell",
+            "command": "meson compile -C _build",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "meson: configure",
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+            "detail": "Compile the app",
+            "problemMatcher": [
+                {
+                    // valac reports `../src/window.vala:12.5-12.9: error: ...`, with the
+                    // path relative to the build directory ninja runs in.
+                    "owner": "vala",
+                    "source": "valac",
+                    "fileLocation": ["relative", "${workspaceFolder}/_build"],
+                    "pattern": {
+                        "regexp": "^(.*\\.vala):(\\d+)\\.(\\d+)-\\d+\\.(\\d+): (error|warning): (.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "endColumn": 4,
+                        "severity": 5,
+                        "message": 6
+                    }
+                },
+                "$gcc"
+            ]
+        },
+        {
+            "label": "meson: test",
+            "type": "shell",
+            "command": "meson test -C _build --print-errorlogs",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "meson: build",
+            "group": { "kind": "test", "isDefault": true },
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+            "detail": "Validate the desktop, AppStream and GSettings files"
+        },
+        {
+            "label": "meson: run",
+            "type": "shell",
+            "command": "meson devenv -C _build starter",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "meson: build",
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+            "detail": "Run the app uninstalled (devenv puts the compiled schema on the schema path)"
+        },
+        {
+            "label": "meson: wipe build directory",
+            "type": "shell",
+            "command": "meson setup --wipe _build",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "detail": "Re-probe the toolchain, keeping the configured options"
+        }
+    ]
+}

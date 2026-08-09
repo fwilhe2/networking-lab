@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.12"/>
+  <requires lib="libadwaita" version="1.5"/>
+
+  <template class="StarterPreferencesDialog" parent="AdwPreferencesDialog">
+
+    <child>
+      <object class="AdwPreferencesPage">
+        <property name="title" translatable="yes">General</property>
+        <property name="icon-name">preferences-system-symbolic</property>
+
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Appearance</property>
+
+            <child>
+              <object class="AdwSwitchRow" id="demo_row">
+                <property name="title" translatable="yes">Demo Setting</property>
+                <property name="subtitle" translatable="yes">The same GSettings key the main window binds to</property>
+              </object>
+            </child>
+
+          </object>
+        </child>
+
+      </object>
+    </child>
+
+  </template>
+</interface>

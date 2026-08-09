@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="starter">
+  <schema id="com.example.Starter" path="/com/example/Starter/">
+
+    <key name="window-width" type="i">
+      <default>800</default>
+      <summary>Window width</summary>
+    </key>
+
+    <key name="window-height" type="i">
+      <default>600</default>
+      <summary>Window height</summary>
+    </key>
+
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Whether the window is maximized</summary>
+    </key>
+
+    <key name="demo-setting" type="b">
+      <default>false</default>
+      <summary>Demo setting</summary>
+      <description>An example boolean, bound to a switch row in both the main window and the preferences dialog.</description>
+    </key>
+
+  </schema>
+</schemalist>

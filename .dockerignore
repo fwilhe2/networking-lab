@@ -1,0 +1,13 @@
+_build/
+build/
+.flatpak-builder/
+_flatpak/
+_repo/
+repo/
+.git/
+.github/
+.devcontainer/
+.vscode/
+*.flatpak
+po/*.mo
+po/*.pot

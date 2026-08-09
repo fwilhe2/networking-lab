@@ -1,0 +1,70 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // Breakpoints land in the .vala sources: Meson passes --debug to valac
+            // for buildtype=debug, so the generated C carries #line directives back
+            // to the Vala. Keep the build in debug or you will stop in generated C.
+            "name": "Run and Debug Starter",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/_build/src/starter",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "meson: build",
+            "environment": [
+                // What `meson devenv` sets. Already in the dev container's
+                // environment; repeated here so the config also works when the
+                // folder is opened outside the container.
+                {
+                    "name": "GSETTINGS_SCHEMA_DIR",
+                    "value": "${workspaceFolder}/_build/data"
+                }
+            ],
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            // Same, but g_critical()/g_warning() abort instead of printing, so the
+            // debugger stops with the stack that produced them. This is the way to
+            // find the cause of a GTK or GLib complaint in the console.
+            "name": "Debug Starter (break on GLib criticals)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/_build/src/starter",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "meson: build",
+            "environment": [
+                {
+                    "name": "GSETTINGS_SCHEMA_DIR",
+                    "value": "${workspaceFolder}/_build/data"
+                },
+                {
+                    "name": "G_DEBUG",
+                    "value": "fatal-criticals"
+                }
+            ],
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,7 @@
+data/com.example.Starter.desktop.in
+data/com.example.Starter.metainfo.xml.in
+src/application.vala
+src/preferences-dialog.vala
+src/window.vala
+src/preferences-dialog.ui
+src/window.ui
