@@ -1,20 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.example.Starter</id>
+  <id>io.github.fwilhe2.NetworkingLab</id>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
 
-  <name>Starter</name>
-  <summary>A Vala and GTK 4 starter application</summary>
+  <name>Networking Lab</name>
+  <summary>A GNOME application for experimenting with networking</summary>
 
   <description>
     <p>
-      Starter is a small template application built with Vala, GTK 4, libadwaita
-      and Meson. It follows the GNOME Human Interface Guidelines and is meant to
-      be renamed and grown into your own application.
+      Networking Lab is an application built with Vala, GTK 4, libadwaita and
+      Meson, following the GNOME Human Interface Guidelines.
     </p>
-    <p>It demonstrates:</p>
+    <p>It provides:</p>
     <ul>
       <li>An adaptive window that stays usable at phone widths</li>
       <li>Boxed lists, toasts, a preferences dialog and an about dialog</li>
@@ -22,18 +21,18 @@
     </ul>
   </description>
 
-  <developer id="com.example">
-    <name>Your Name</name>
+  <developer id="io.github.fwilhe2">
+    <name>Florian Wilhelm</name>
   </developer>
 
-  <launchable type="desktop-id">com.example.Starter.desktop</launchable>
+  <launchable type="desktop-id">io.github.fwilhe2.NetworkingLab.desktop</launchable>
 
-  <url type="homepage">https://example.com</url>
-  <url type="bugtracker">https://example.com/issues</url>
+  <url type="homepage">https://github.com/fwilhe2/networking-lab</url>
+  <url type="bugtracker">https://github.com/fwilhe2/networking-lab/issues</url>
 
   <screenshots>
     <screenshot type="default">
-      <image>https://example.com/screenshot-1.png</image>
+      <image>https://raw.githubusercontent.com/fwilhe2/networking-lab/main/data/screenshot-1.png</image>
       <caption>The main window</caption>
     </screenshot>
   </screenshots>

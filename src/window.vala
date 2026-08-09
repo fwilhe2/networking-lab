@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-namespace Starter {
+namespace NetworkingLab {
 
-    [GtkTemplate (ui = "/com/example/Starter/window.ui")]
+    [GtkTemplate (ui = "/io/github/fwilhe2/NetworkingLab/window.ui")]
     public class Window : Adw.ApplicationWindow {
 
         [GtkChild] private unowned Adw.ToastOverlay toast_overlay;

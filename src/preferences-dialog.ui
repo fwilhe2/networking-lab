@@ -3,7 +3,7 @@
   <requires lib="gtk" version="4.12"/>
   <requires lib="libadwaita" version="1.5"/>
 
-  <template class="StarterPreferencesDialog" parent="AdwPreferencesDialog">
+  <template class="NetworkingLabPreferencesDialog" parent="AdwPreferencesDialog">
 
     <child>
       <object class="AdwPreferencesPage">

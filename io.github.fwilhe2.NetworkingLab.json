@@ -1,9 +1,9 @@
 {
-    "id" : "com.example.Starter",
+    "id" : "io.github.fwilhe2.NetworkingLab",
     "runtime" : "org.gnome.Platform",
     "runtime-version" : "50",
     "sdk" : "org.gnome.Sdk",
-    "command" : "starter",
+    "command" : "networking-lab",
     "finish-args" : [
         "--share=ipc",
         "--socket=wayland",
@@ -19,7 +19,7 @@
     ],
     "modules" : [
         {
-            "name" : "starter",
+            "name" : "networking-lab",
             "builddir" : true,
             "buildsystem" : "meson",
             "sources" : [

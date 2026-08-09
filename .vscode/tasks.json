@@ -53,7 +53,7 @@
         {
             "label": "meson: run",
             "type": "shell",
-            "command": "meson devenv -C _build starter",
+            "command": "meson devenv -C _build networking-lab",
             "options": { "cwd": "${workspaceFolder}" },
             "dependsOn": "meson: build",
             "problemMatcher": [],

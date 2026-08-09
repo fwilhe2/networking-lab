@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-namespace Starter {
+namespace NetworkingLab {
 
-    [GtkTemplate (ui = "/com/example/Starter/preferences-dialog.ui")]
+    [GtkTemplate (ui = "/io/github/fwilhe2/NetworkingLab/preferences-dialog.ui")]
     public class PreferencesDialog : Adw.PreferencesDialog {
 
         [GtkChild] private unowned Adw.SwitchRow demo_row;

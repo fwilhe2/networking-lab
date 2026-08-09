@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Networking Lab
+Comment=A Vala and GTK 4 networking lab
+Keywords=Vala;GTK;GNOME;Network;Networking;
+Exec=networking-lab
+Icon=io.github.fwilhe2.NetworkingLab
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Network;
+StartupNotify=true

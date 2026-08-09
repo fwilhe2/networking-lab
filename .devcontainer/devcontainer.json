@@ -1,4 +1,4 @@
-// Dev container for Starter — Vala + GTK 4 + libadwaita.
+// Dev container for Networking Lab — Vala + GTK 4 + libadwaita.
 //
 // Requires the "Dev Containers" extension (ms-vscode-remote.remote-containers)
 // and a Linux host running Wayland or X11: the container renders on the host's
@@ -28,7 +28,7 @@
     // Keep the build tree inside the container. A _build configured on the host
     // bakes in host paths and breaks when Meson re-runs under /workspaces, so the
     // two must not share one directory.
-    "type=volume,source=starter-devcontainer-build,target=${containerWorkspaceFolder}/_build"
+    "type=volume,source=networking-lab-devcontainer-build,target=${containerWorkspaceFolder}/_build"
   ],
 
   "runArgs": [
@@ -51,7 +51,7 @@
     "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
     "GDK_BACKEND": "wayland,x11",
     // What `meson devenv` would set. Having it in the environment means the
-    // debugger, the tasks and a plain `_build/src/starter` all find the compiled
+    // debugger, the tasks and a plain `_build/src/networking-lab` all find the compiled
     // GSettings schema; without it the app aborts during window construction.
     "GSETTINGS_SCHEMA_DIR": "${containerWorkspaceFolder}/_build/data"
   },

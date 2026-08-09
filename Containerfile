@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 #
-# Multi-stage build for Starter.
+# Multi-stage build for Networking Lab.
 #
 # The builder stage compiles, runs the validation tests and stages an install;
 # the runtime stage carries only what is needed to run the binary.
 #
-# Build:  podman build -f Containerfile -t starter .
-#         docker build -f Containerfile -t starter .
+# Build:  podman build -f Containerfile -t networking-lab .
+#         docker build -f Containerfile -t networking-lab .
 #
 # Debian trixie ships GTK 4.18, libadwaita 1.7 and Vala 0.56, which satisfy the
 # versions required in meson.build.
@@ -71,4 +71,4 @@ WORKDIR /home/app
 
 ENV GDK_BACKEND=wayland,x11
 
-ENTRYPOINT ["/usr/bin/starter"]
+ENTRYPOINT ["/usr/bin/networking-lab"]

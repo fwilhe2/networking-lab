@@ -4,9 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A template GNOME application — Vala + GTK 4 + libadwaita, built with Meson, following the
-GNOME Human Interface Guidelines. It exists to be renamed and grown into a real app, so
-`Starter` / `starter` / `com.example.Starter` are placeholders, not product names.
+A GNOME application — Vala + GTK 4 + libadwaita, built with Meson, following the GNOME
+Human Interface Guidelines. It started from a template, so the UI is still the scaffolded
+welcome page; the networking functionality is yet to be written.
+
+Names in use: display name `Networking Lab`, Vala namespace / GType prefix `NetworkingLab`,
+executable and Meson project `networking-lab`, app ID `io.github.fwilhe2.NetworkingLab`.
+Note that Meson variables in `src/meson.build` and the GResource `c_name` use
+`networking_lab` with an underscore — a hyphen is invalid in a Meson identifier and in a
+C symbol.
 
 ## Commands
 
@@ -14,7 +20,7 @@ GNOME Human Interface Guidelines. It exists to be renamed and grown into a real 
 meson setup _build
 meson compile -C _build
 meson test -C _build --print-errorlogs
-meson devenv -C _build starter          # run uninstalled
+meson devenv -C _build networking-lab          # run uninstalled
 ```
 
 Three tests exist, all in suite `data`; run one by name:
@@ -28,8 +34,8 @@ meson test -C _build --suite data
 is only needed when that fails.
 
 ```sh
-podman build -f Containerfile -t starter .   # builder stage runs meson test — a green build is a green suite
-flatpak-builder --user --install --force-clean _flatpak com.example.Starter.json
+podman build -f Containerfile -t networking-lab .   # builder stage runs meson test — a green build is a green suite
+flatpak-builder --user --install --force-clean _flatpak io.github.fwilhe2.NetworkingLab.json
 ```
 
 `.vscode/tasks.json` wraps the same Meson commands (`meson: build` is the default build
@@ -40,16 +46,16 @@ task); `.vscode/launch.json` runs the binary under gdb. Both assume the build di
 
 ### The app ID is a cross-cutting string
 
-`com.example.Starter` and its slash form `/com/example/Starter` are load-bearing in six
+`io.github.fwilhe2.NetworkingLab` and its slash form `/io/github/fwilhe2/NetworkingLab` are load-bearing in six
 places that must agree. A mismatch fails at **runtime**, not build time:
 
 | Place | Form |
 | --- | --- |
 | `meson.build` `application_id` | dotted → `config.h` → `Config.APP_ID` |
 | `src/application.vala` `resource_base_path` | slashed |
-| `src/starter.gresource.xml` `prefix` | slashed |
+| `src/networking-lab.gresource.xml` `prefix` | slashed |
 | `[GtkTemplate (ui = ...)]` in `window.vala`, `preferences-dialog.vala` | slashed + filename |
-| `data/com.example.Starter.gschema.xml` schema `id` and `path` | dotted and slashed |
+| `data/io.github.fwilhe2.NetworkingLab.gschema.xml` schema `id` and `path` | dotted and slashed |
 | `data/` filenames, icon filenames, `.desktop` `Icon=` | dotted |
 
 `GLib.Settings (Config.APP_ID)` binds the schema to the ID, so a mismatch aborts the
@@ -57,9 +63,9 @@ process during window construction.
 
 ### .ui templates are coupled to Vala by GType name
 
-`<template class="StarterWindow" parent="AdwApplicationWindow">` resolves to `namespace
-Starter` + `class Window`. Renaming either side without the other breaks template loading
-silently. Same for `StarterPreferencesDialog`.
+`<template class="NetworkingLabWindow" parent="AdwApplicationWindow">` resolves to `namespace
+NetworkingLab` + `class Window`. Renaming either side without the other breaks template loading
+silently. Same for `NetworkingLabPreferencesDialog`.
 
 ### config.h ↔ config.vapi
 
@@ -69,7 +75,7 @@ macro. Adding a build-time constant means editing both files.
 
 ### Adding a .ui file takes three edits
 
-1. `src/starter.gresource.xml` — bundle it into the binary
+1. `src/networking-lab.gresource.xml` — bundle it into the binary
 2. `po/POTFILES` — so its strings get extracted
 3. `src/meson.build` — only when a matching `.vala` is added
 
@@ -96,8 +102,8 @@ baseline, not regressions.
 ## Runtime notes
 
 - `meson devenv` is required to run uninstalled — it puts the compiled schema on the
-  GSettings path. Running `_build/src/starter` directly aborts with
-  `Settings schema 'com.example.Starter' is not installed` (exit 133). The dev container
+  GSettings path. Running `_build/src/networking-lab` directly aborts with
+  `Settings schema 'io.github.fwilhe2.NetworkingLab' is not installed` (exit 133). The dev container
   exports `GSETTINGS_SCHEMA_DIR` itself, so the bare binary does run there.
 - The app icon only resolves after a real install; uninstalled runs fall back.
 - `gnome.post_install()` skips schema compilation and icon caching when `DESTDIR` is set.
@@ -134,7 +140,8 @@ runs in.
 
 ## Renaming
 
-`README.md` carries the rename procedure: rename files whose *names* carry the ID, then
-`sed` file contents. It is verified end-to-end (Meson build, container build, the CI
-workflow's manifest reference and the `.vscode` / `.devcontainer` paths all survive it). If you change the layout, re-verify it — a
-missed file surfaces as a confusing Meson or runtime error rather than an obvious one.
+If the app ID or project name ever changes again, rename the files whose *names* carry the
+ID first, then `sed` file contents — and afterwards check `src/meson.build`, whose variable
+names and `c_name` must stay valid identifiers. A missed file surfaces as a confusing Meson
+or runtime error rather than an obvious one, so re-verify the Meson build, the container
+build, the CI workflow's manifest reference and the `.vscode` / `.devcontainer` paths.

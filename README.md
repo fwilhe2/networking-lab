@@ -1,16 +1,14 @@
-# Starter
+# Networking Lab
 
-A Vala + GTK 4 + libadwaita application scaffolded with Meson, following the
+A Vala + GTK 4 + libadwaita application built with Meson, following the
 [GNOME Human Interface Guidelines](https://developer.gnome.org/hig/).
-
-Rename it and grow your own app out of it.
 
 ## Build and run
 
 ```sh
 meson setup _build
 meson compile -C _build
-meson devenv -C _build starter
+meson devenv -C _build networking-lab
 ```
 
 `meson devenv` puts the compiled GSettings schema on the schema path, so the app
@@ -41,8 +39,8 @@ to build, then press **F5**.
 | **Run Task → meson: test** | `meson test -C _build --print-errorlogs` |
 | **Run Task → meson: run** | Start the app without the debugger |
 
-Two launch configurations are provided. *Run and Debug Starter* is the ordinary
-one; *Debug Starter (break on GLib criticals)* sets `G_DEBUG=fatal-criticals`, so
+Two launch configurations are provided. *Run and Debug Networking Lab* is the ordinary
+one; *Debug Networking Lab (break on GLib criticals)* sets `G_DEBUG=fatal-criticals`, so
 a `g_critical()` traps into the debugger with the stack that caused it instead of
 scrolling past in the console. That is the fastest way to find the origin of a
 GTK complaint.
@@ -50,7 +48,7 @@ GTK complaint.
 Breakpoints land in Vala rather than in generated C because Meson passes
 `--debug` to valac for `buildtype=debug`, which writes `#line` directives back to
 the `.vala` sources. Keep the build in `debug` or you will be stepping through
-`_build/src/starter.p/*.c`.
+`_build/src/networking-lab.p/*.c`.
 
 Some details worth knowing before you change the setup:
 
@@ -59,7 +57,7 @@ Some details worth knowing before you change the setup:
   from `/workspaces`, so the two are deliberately kept apart. Building on the
   host and in the container at the same time is fine.
 - **`GSETTINGS_SCHEMA_DIR` is preset** in the container to `_build/data`, which
-  is the part of `meson devenv` the app actually needs. `_build/src/starter` runs
+  is the part of `meson devenv` the app actually needs. `_build/src/networking-lab` runs
   straight from a terminal there — outside the container it still aborts without
   `meson devenv`.
 - **The host's `XDG_RUNTIME_DIR` is mounted whole**, which brings the Wayland
@@ -86,8 +84,8 @@ To use Podman instead of Docker, point the extension at it with
 
 ```sh
 flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
-flatpak-builder --user --install --force-clean _flatpak com.example.Starter.json
-flatpak run com.example.Starter
+flatpak-builder --user --install --force-clean _flatpak io.github.fwilhe2.NetworkingLab.json
+flatpak run io.github.fwilhe2.NetworkingLab
 ```
 
 ### Container
@@ -97,7 +95,7 @@ validation tests, the second carries only the runtime libraries and the
 installed binary.
 
 ```sh
-podman build -f Containerfile -t starter .   # or: docker build -f Containerfile -t starter .
+podman build -f Containerfile -t networking-lab .   # or: docker build -f Containerfile -t networking-lab .
 ```
 
 Because the test suite runs inside the builder stage, a successful image build
@@ -117,7 +115,7 @@ podman run --rm \
     -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$U/bus \
     -v $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/run/user/$U/$WAYLAND_DISPLAY \
     -v $XDG_RUNTIME_DIR/bus:/run/user/$U/bus \
-    starter
+    networking-lab
 ```
 
 Two things to expect:
@@ -161,14 +159,15 @@ src/
   window.ui                     main window template + primary menu
   preferences-dialog.vala       preferences dialog
   preferences-dialog.ui         preferences template
-  starter.gresource.xml         bundles the .ui files into the binary
+  networking-lab.gresource.xml  bundles the .ui files into the binary
 data/
   *.desktop.in                  desktop entry
   *.metainfo.xml.in             AppStream metadata (needed by software centres)
   *.gschema.xml                 GSettings schema
   icons/hicolor/...             app icon and symbolic icon
 po/                             translation infrastructure
-com.example.Starter.json        Flatpak manifest
+io.github.fwilhe2.NetworkingLab.json
+                                Flatpak manifest
 Containerfile                   multi-stage container build
 .dockerignore                   keeps build dirs out of the container context
 .devcontainer/
@@ -186,7 +185,7 @@ CLAUDE.md                       notes for Claude Code sessions
 LICENSE                         GPL-3.0 text
 ```
 
-## What the template demonstrates
+## What the scaffolding provides
 
 | Area | Where |
 | --- | --- |
@@ -220,41 +219,31 @@ LICENSE                         GPL-3.0 text
 
 No keyboard-shortcuts window. `GtkShortcutsWindow` is deprecated as of GTK 4.18,
 and its replacement, `AdwShortcutsDialog`, arrived in libadwaita 1.8 — this
-template targets 1.5. On libadwaita ≥ 1.8, add an `AdwShortcutsDialog` and wire
+project targets 1.5. On libadwaita ≥ 1.8, add an `AdwShortcutsDialog` and wire
 it to `app.shortcuts` with the `Ctrl+?` accel.
 
-## Renaming the project
+## The app ID
 
-Pick a name, an app ID and a namespace, then:
+`io.github.fwilhe2.NetworkingLab` and its slash form
+`/io/github/fwilhe2/NetworkingLab` appear in six places that must agree — a
+mismatch aborts the process at runtime rather than failing the build:
 
-```sh
-# 1. Rename every file whose *name* carries the app ID or the project name
-find . -path ./_build -prune -o \( -name '*Starter*' -o -name '*starter*' \) -print |
-while read -r f; do
-    mv "$f" "$(dirname "$f")/$(basename "$f" | sed \
-        -e 's/com\.example\.Starter/org.example.MyApp/' \
-        -e 's/Starter/MyApp/' \
-        -e 's/starter/myapp/')"
-done
+| Place | Form |
+| --- | --- |
+| `application_id` in `meson.build` | dotted |
+| `resource_base_path` in `src/application.vala` | slashed |
+| `prefix` in `src/networking-lab.gresource.xml` | slashed |
+| `[GtkTemplate (ui = ...)]` in `window.vala`, `preferences-dialog.vala` | slashed |
+| schema `id` and `path` in `data/*.gschema.xml` | dotted and slashed |
+| `data/` filenames, icon filenames, `Icon=` in the desktop entry | dotted |
 
-# 2. Rewrite the identifiers
-grep -rl --exclude-dir=_build --exclude-dir=.git \
-    -e 'com.example.Starter' -e 'com/example/Starter' -e 'Starter' -e 'starter' . |
-xargs sed -i \
-    -e 's|com\.example\.Starter|org.example.MyApp|g' \
-    -e 's|com/example/Starter|org/example/MyApp|g' \
-    -e 's|Starter|MyApp|g' \
-    -e 's|starter|myapp|g'
-```
+The GType names in the `.ui` templates (`NetworkingLabWindow`,
+`NetworkingLabPreferencesDialog`) are the Vala `namespace` + `class`
+concatenated, and must keep matching the Vala side.
 
-Then check the leftovers by hand: the `project()` name in `meson.build`, the
-Vala `namespace`, the `developer_name` / `copyright` / URLs in
-`src/application.vala` and `data/*.metainfo.xml.in`, and the placeholder
-screenshot URL. Replace `data/icons/**` with your own artwork.
-
-The GType names in the `.ui` templates (`StarterWindow`,
-`StarterPreferencesDialog`) are `namespace` + `class` concatenated — they must
-keep matching the Vala side after renaming.
+Note that the executable and the Meson project are named `networking-lab`, but
+the Meson variables in `src/meson.build` and the GResource `c_name` use
+`networking_lab` — a hyphen is not valid in either identifier.
 
 ## Note on build warnings
 
@@ -280,7 +269,7 @@ a licence it isn't under:
 | Place | Value |
 | --- | --- |
 | SPDX headers in `src/*.vala`, `src/config.vapi` | `GPL-3.0-or-later` |
-| `<project_license>` in `data/com.example.Starter.metainfo.xml.in` | `GPL-3.0-or-later` |
+| `<project_license>` in `data/io.github.fwilhe2.NetworkingLab.metainfo.xml.in` | `GPL-3.0-or-later` |
 | `license_type` in `src/application.vala` | `Gtk.License.GPL_3_0` |
 
 Note that GTK's `GPL_3_0` means "version 3 **or later**" — the version-3-only

@@ -1,5 +1,5 @@
-data/com.example.Starter.desktop.in
-data/com.example.Starter.metainfo.xml.in
+data/io.github.fwilhe2.NetworkingLab.desktop.in
+data/io.github.fwilhe2.NetworkingLab.metainfo.xml.in
 src/application.vala
 src/preferences-dialog.vala
 src/window.vala

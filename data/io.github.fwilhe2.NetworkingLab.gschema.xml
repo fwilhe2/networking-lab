@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="starter">
-  <schema id="com.example.Starter" path="/com/example/Starter/">
+<schemalist gettext-domain="networking-lab">
+  <schema id="io.github.fwilhe2.NetworkingLab" path="/io/github/fwilhe2/NetworkingLab/">
 
     <key name="window-width" type="i">
       <default>800</default>

@@ -9,5 +9,5 @@ int main (string[] args) {
     Intl.bind_textdomain_codeset (Config.GETTEXT_PACKAGE, "UTF-8");
     Intl.textdomain (Config.GETTEXT_PACKAGE);
 
-    return new Starter.Application ().run (args);
+    return new NetworkingLab.Application ().run (args);
 }

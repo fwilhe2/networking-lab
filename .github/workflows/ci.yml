@@ -87,18 +87,18 @@ jobs:
       - name: Build
         run: |
           flatpak-builder --user --disable-rofiles-fuse --force-clean \
-            --repo=_repo _flatpak com.example.Starter.json
+            --repo=_repo _flatpak io.github.fwilhe2.NetworkingLab.json
 
       - name: Create bundle
         run: |
-          flatpak build-bundle _repo starter.flatpak com.example.Starter \
+          flatpak build-bundle _repo networking-lab.flatpak io.github.fwilhe2.NetworkingLab \
             --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Upload bundle
         uses: actions/upload-artifact@v7
         with:
-          name: starter-flatpak
-          path: starter.flatpak
+          name: networking-lab-flatpak
+          path: networking-lab.flatpak
 
   container:
     name: Container image

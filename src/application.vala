@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-namespace Starter {
+namespace NetworkingLab {
 
     public class Application : Adw.Application {
 
@@ -11,7 +11,7 @@ namespace Starter {
             Object (
                 application_id: Config.APP_ID,
                 flags: ApplicationFlags.DEFAULT_FLAGS,
-                resource_base_path: "/com/example/Starter"
+                resource_base_path: "/io/github/fwilhe2/NetworkingLab"
             );
         }
 
@@ -54,15 +54,15 @@ namespace Starter {
 
         private void on_about () {
             var about = new Adw.AboutDialog () {
-                application_name = _("Starter"),
+                application_name = _("Networking Lab"),
                 application_icon = Config.APP_ID,
-                developer_name = "Your Name",
+                developer_name = "Florian Wilhelm",
                 version = Config.VERSION,
-                developers = { "Your Name <you@example.com>" },
-                copyright = "© 2026 Your Name",
+                developers = { "Florian Wilhelm <fwilhelm.wgt+github@gmail.com>" },
+                copyright = "© 2026 Florian Wilhelm",
                 license_type = Gtk.License.GPL_3_0,
-                website = "https://example.com",
-                issue_url = "https://example.com/issues",
+                website = "https://github.com/fwilhe2/networking-lab",
+                issue_url = "https://github.com/fwilhe2/networking-lab/issues",
                 /* Translators: replace with your name(s), one per line. */
                 translator_credits = _("translator-credits"),
             };

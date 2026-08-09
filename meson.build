@@ -1,4 +1,4 @@
-project('starter', ['c', 'vala'],
+project('networking-lab', ['c', 'vala'],
           version: '0.1.0',
     meson_version: '>= 1.0.0',
   default_options: ['warning_level=2', 'c_std=gnu11'],
@@ -7,7 +7,7 @@ project('starter', ['c', 'vala'],
 i18n  = import('i18n')
 gnome = import('gnome')
 
-application_id  = 'com.example.Starter'
+application_id  = 'io.github.fwilhe2.NetworkingLab'
 gettext_package = meson.project_name()
 
 conf = configuration_data()
@@ -28,7 +28,7 @@ config_h = configure_file(output: 'config.h', configuration: conf)
 add_project_arguments([
   '-I' + meson.project_build_root(),
   '-DGETTEXT_PACKAGE="@0@"'.format(gettext_package),
-  '-DG_LOG_DOMAIN="Starter"',
+  '-DG_LOG_DOMAIN="NetworkingLab"',
   '-Wno-unused-parameter',
   '-Wno-unused-variable',
   '-Wno-unused-but-set-variable',

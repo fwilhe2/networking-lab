@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Development image for Starter.
+# Development image for Networking Lab.
 #
 # `Containerfile` in the repository root builds a lean image that *runs* the app.
 # This one is the environment you *edit* it in: toolchain, debugger, language
