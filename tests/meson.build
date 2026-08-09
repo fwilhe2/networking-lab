@@ -9,6 +9,7 @@ core_tests = [
   'normalize',
   'derive',
   'validate',
+  'compile',
 ]
 
 foreach name : core_tests
@@ -19,6 +20,7 @@ foreach name : core_tests
            install: false,
     ),
     suite: 'core',
+    env: { 'NETLAB_TEST_DATA': meson.current_source_dir() / 'data' },
     protocol: 'tap',
     args: ['--tap'],
   )

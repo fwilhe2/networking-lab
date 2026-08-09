@@ -1,0 +1,14 @@
+{"projectName":"Weird Name!","isolated":false,
+ "images":{"router":"frr:11","host":"alpine:edge","server":"python:3.13"},
+ "nodes":[
+  {"id":"n1","type":"router","name":"r1","frrExtra":"router bgp 65000\n\tbgp router-id 1.1.1.1\n\n\t\tneighbor x  "},
+  {"id":"n2","type":"router","name":"r2"},
+  {"id":"n3","type":"switch","name":"sw1","subnet":"192.168.10.0/29"},
+  {"id":"n4","type":"pc","name":"pc1","gw":"192.168.10.1"},
+  {"id":"n5","type":"server","name":"srv1","httpPort":"8080"},
+  {"id":"n6","type":"pc","name":"lonely"}],
+ "links":[
+  {"id":"l1","a":"n1","b":"n2","subnet":"10.0.3.0/24","ips":{"n1":"10.0.3.1","n2":"10.0.3.2"}},
+  {"id":"l2","a":"n1","b":"n3","ips":{"n1":"192.168.10.1"}},
+  {"id":"l3","a":"n4","b":"n3","ips":{"n4":"192.168.10.2"}},
+  {"id":"l4","a":"n5","b":"n3","ips":{"n5":"192.168.10.3"}}]}

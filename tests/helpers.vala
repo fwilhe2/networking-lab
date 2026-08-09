@@ -14,23 +14,25 @@ public State parse_topology (string json) {
     try {
         return normalize_json (json);
     } catch (Error e) {
-        Test.fail_printf ("fixture did not normalise: %s", e.message);
-        assert_not_reached ();
+        /* error () rather than assert: it prints the reason before aborting. */
+        error ("fixture did not normalise: %s", e.message);
     }
 }
 
 public void assert_strings_equal (string[] actual, string[] expected) {
+    /* Report and return rather than assert: g_test_fail_printf marks the test
+       failed, and aborting here would lose the message before TAP flushes it. */
     if (actual.length != expected.length) {
         Test.fail_printf ("expected %d entries, got %d: [%s]",
                           expected.length, actual.length, string.joinv (", ", actual));
-        assert_not_reached ();
+        return;
     }
 
     for (var i = 0; i < expected.length; i++) {
         if (actual[i] != expected[i]) {
             Test.fail_printf ("at %d: expected \"%s\", got \"%s\" (whole list: [%s])",
                               i, expected[i], actual[i], string.joinv (", ", actual));
-            assert_not_reached ();
+            return;
         }
     }
 }
