@@ -9,6 +9,9 @@ netlab_core_sources = files(
   'state.vala',
   'serialize.vala',
   'normalize.vala',
+  'derive.vala',
+  'validate.vala',
+  'demo.vala',
 )
 
 netlab_core_deps = [

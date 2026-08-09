@@ -7,12 +7,14 @@ core_tests = [
   'names',
   'geometry',
   'normalize',
+  'derive',
+  'validate',
 ]
 
 foreach name : core_tests
   test(name,
     executable('test-@0@'.format(name),
-      files('@0@.vala'.format(name)),
+      files('@0@.vala'.format(name), 'helpers.vala'),
       dependencies: [netlab_core_dep],
            install: false,
     ),
