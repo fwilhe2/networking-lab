@@ -6,6 +6,9 @@ netlab_core_sources = files(
   'ipv4.vala',
   'names.vala',
   'geometry.vala',
+  'state.vala',
+  'serialize.vala',
+  'normalize.vala',
 )
 
 netlab_core_deps = [

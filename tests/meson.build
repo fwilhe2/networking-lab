@@ -6,6 +6,7 @@ core_tests = [
   'ipv4',
   'names',
   'geometry',
+  'normalize',
 ]
 
 foreach name : core_tests
