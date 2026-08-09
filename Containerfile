@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config \
         libglib2.0-dev \
         libglib2.0-dev-bin \
+        libjson-glib-dev \
         libgtk-4-dev \
         libgtk-4-bin \
         libadwaita-1-dev \
@@ -57,6 +58,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgtk-4-1 \
         libadwaita-1-0 \
+        libjson-glib-1.0-0 \
         adwaita-icon-theme \
         fonts-dejavu-core \
         dbus \

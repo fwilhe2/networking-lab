@@ -59,6 +59,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config \
         libglib2.0-dev \
         libglib2.0-dev-bin \
+        libjson-glib-dev \
         libgtk-4-dev \
         libgtk-4-bin \
         libadwaita-1-dev \

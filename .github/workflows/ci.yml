@@ -27,7 +27,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             build-essential valac meson ninja-build pkg-config \
-            libglib2.0-dev libglib2.0-dev-bin \
+            libglib2.0-dev libglib2.0-dev-bin libjson-glib-dev \
             libgtk-4-dev libadwaita-1-dev \
             gettext desktop-file-utils appstream \
             git ca-certificates
