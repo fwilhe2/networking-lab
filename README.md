@@ -48,7 +48,7 @@ GTK complaint.
 Breakpoints land in Vala rather than in generated C because Meson passes
 `--debug` to valac for `buildtype=debug`, which writes `#line` directives back to
 the `.vala` sources. Keep the build in `debug` or you will be stepping through
-`_build/src/networking-lab.p/*.c`.
+`_build/src/ui/networking-lab.p/*.c`.
 
 Some details worth knowing before you change the setup:
 
@@ -57,7 +57,7 @@ Some details worth knowing before you change the setup:
   from `/workspaces`, so the two are deliberately kept apart. Building on the
   host and in the container at the same time is fine.
 - **`GSETTINGS_SCHEMA_DIR` is preset** in the container to `_build/data`, which
-  is the part of `meson devenv` the app actually needs. `_build/src/networking-lab` runs
+  is the part of `meson devenv` the app actually needs. `_build/src/ui/networking-lab` runs
   straight from a terminal there — outside the container it still aborts without
   `meson devenv`.
 - **The host's `XDG_RUNTIME_DIR` is mounted whole**, which brings the Wayland
@@ -151,15 +151,21 @@ via the job's `packages: write` permission, so no secrets to configure.
 ```
 meson.build                     project setup, config.h, compiler flags
 src/
-  meson.build                   the executable, deps, GResource bundle
   config.vapi                   exposes config.h values to Vala
-  main.vala                     entry point, gettext setup
-  application.vala              AdwApplication: actions, accels, about dialog
-  window.vala                   main window: GSettings bindings, win.* actions
-  window.ui                     main window template + primary menu
-  preferences-dialog.vala       preferences dialog
-  preferences-dialog.ui         preferences template
-  networking-lab.gresource.xml  bundles the .ui files into the binary
+  core/                         the document model and compiler — no GTK
+    model.vala                  device type, canvas and document constants
+  cli/
+    netlab-compile.vala         headless driver for the core library
+  ui/
+    meson.build                 the executable, deps, GResource bundle
+    main.vala                   entry point, gettext setup
+    application.vala            AdwApplication: actions, accels, about dialog
+    window.vala                 main window: GSettings bindings, win.* actions
+    window.ui                   main window template + primary menu
+    preferences-dialog.vala     preferences dialog
+    preferences-dialog.ui       preferences template
+    networking-lab.gresource.xml  bundles the .ui files into the binary
+tests/                          unit tests for core, suite `core`
 data/
   *.desktop.in                  desktop entry
   *.metainfo.xml.in             AppStream metadata (needed by software centres)
@@ -181,6 +187,7 @@ Containerfile                   multi-stage container build
   settings.json                 file associations, Meson build folder
   extensions.json               recommended extensions
 .github/workflows/ci.yml        CI: build & test, Flatpak, container image
+PLAN.md                         the implementation plan
 CLAUDE.md                       notes for Claude Code sessions
 LICENSE                         GPL-3.0 text
 ```
@@ -189,13 +196,13 @@ LICENSE                         GPL-3.0 text
 
 | Area | Where |
 | --- | --- |
-| `AdwApplicationWindow` + `AdwToolbarView` + `AdwHeaderBar` | `src/window.ui` |
-| Adaptive layout via `AdwBreakpoint` | `src/window.ui` |
-| Boxed lists (`AdwPreferencesGroup` + rows) | `src/window.ui` |
-| Toasts (`AdwToastOverlay`) | `src/window.vala` |
-| `AdwAboutDialog` / `AdwPreferencesDialog` | `src/application.vala` |
-| GSettings bindings, incl. window geometry | `src/window.vala` |
-| `GtkTemplate` / `GtkChild` in Vala | `src/window.vala` |
+| `AdwApplicationWindow` + `AdwToolbarView` + `AdwHeaderBar` | `src/ui/window.ui` |
+| Adaptive layout via `AdwBreakpoint` | `src/ui/window.ui` |
+| Boxed lists (`AdwPreferencesGroup` + rows) | `src/ui/window.ui` |
+| Toasts (`AdwToastOverlay`) | `src/ui/window.vala` |
+| `AdwAboutDialog` / `AdwPreferencesDialog` | `src/ui/application.vala` |
+| GSettings bindings, incl. window geometry | `src/ui/window.vala` |
+| `GtkTemplate` / `GtkChild` in Vala | `src/ui/window.vala` |
 | Translatable strings with `_()` | throughout |
 
 ## HIG conventions baked in
@@ -231,8 +238,8 @@ mismatch aborts the process at runtime rather than failing the build:
 | Place | Form |
 | --- | --- |
 | `application_id` in `meson.build` | dotted |
-| `resource_base_path` in `src/application.vala` | slashed |
-| `prefix` in `src/networking-lab.gresource.xml` | slashed |
+| `resource_base_path` in `src/ui/application.vala` | slashed |
+| `prefix` in `src/ui/networking-lab.gresource.xml` | slashed |
 | `[GtkTemplate (ui = ...)]` in `window.vala`, `preferences-dialog.vala` | slashed |
 | schema `id` and `path` in `data/*.gschema.xml` | dotted and slashed |
 | `data/` filenames, icon filenames, `Icon=` in the desktop entry | dotted |
@@ -248,7 +255,7 @@ the Meson variables in `src/meson.build` and the GResource `c_name` use
 ## Note on build warnings
 
 The build emits a few `-Wincompatible-pointer-types` warnings pointing at
-`src/application.vala`. They come from const-correctness in valac's generated C,
+`src/ui/application.vala`. They come from const-correctness in valac's generated C,
 not from your code, and cannot be suppressed from the command line: valac writes
 `#pragma GCC diagnostic warning "-Wincompatible-pointer-types"` into the C it
 produces, which outranks any `-Wno-` flag. All other generated-code warnings are
@@ -270,7 +277,7 @@ a licence it isn't under:
 | --- | --- |
 | SPDX headers in `src/*.vala`, `src/config.vapi` | `GPL-3.0-or-later` |
 | `<project_license>` in `data/io.github.fwilhe2.NetworkingLab.metainfo.xml.in` | `GPL-3.0-or-later` |
-| `license_type` in `src/application.vala` | `Gtk.License.GPL_3_0` |
+| `license_type` in `src/ui/application.vala` | `Gtk.License.GPL_3_0` |
 
 Note that GTK's `GPL_3_0` means "version 3 **or later**" — the version-3-only
 enum is the separate `GPL_3_0_ONLY`. The `<metadata_license>` in the AppStream

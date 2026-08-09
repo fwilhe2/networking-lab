@@ -21,7 +21,7 @@
             "detail": "Compile the app",
             "problemMatcher": [
                 {
-                    // valac reports `../src/window.vala:12.5-12.9: error: ...`, with the
+                    // valac reports `../src/ui/window.vala:12.5-12.9: error: ...`, with the
                     // path relative to the build directory ninja runs in.
                     "owner": "vala",
                     "source": "valac",

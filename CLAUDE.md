@@ -23,11 +23,13 @@ meson test -C _build --print-errorlogs
 meson devenv -C _build networking-lab          # run uninstalled
 ```
 
-Three tests exist, all in suite `data`; run one by name:
+Two suites: `data` validates the desktop, AppStream and GSettings files; `core` runs the
+Vala unit tests in `tests/`, which link the core library without GTK.
 
 ```sh
-meson test -C _build validate-gschema   # or validate-desktop-file, validate-metainfo-file
+meson test -C _build --suite core
 meson test -C _build --suite data
+meson test -C _build validate-gschema   # or validate-desktop-file, validate-metainfo-file
 ```
 
 `meson compile` reconfigures itself after a `meson.build` edit; `meson setup --wipe _build`
@@ -44,6 +46,19 @@ task); `.vscode/launch.json` runs the binary under gdb. Both assume the build di
 
 ## Architecture
 
+### The core library must not depend on GTK
+
+`src/core/` builds a static library (`netlab_core_dep`) against glib/gobject/gio/json-glib
+only. `src/ui/`, `src/cli/` and `tests/` all consume it. This is the load-bearing structural
+rule of the port — SPEC §1 requires the compiler to be a pure `state → {yaml, warnings}`
+function testable without a UI, and the golden-file test in phase 4 depends on it. If
+anything under `src/core/` ever needs `using Gtk`, it belongs in `src/ui/` instead.
+
+Meson resolves the generated `.vapi` automatically from `link_with:` inside
+`declare_dependency`, so consumers need no `--vapidir` wiring.
+
+`netlab-compile` is deliberately not installed while it is still a stub.
+
 ### The app ID is a cross-cutting string
 
 `io.github.fwilhe2.NetworkingLab` and its slash form `/io/github/fwilhe2/NetworkingLab` are load-bearing in six
@@ -52,8 +67,8 @@ places that must agree. A mismatch fails at **runtime**, not build time:
 | Place | Form |
 | --- | --- |
 | `meson.build` `application_id` | dotted → `config.h` → `Config.APP_ID` |
-| `src/application.vala` `resource_base_path` | slashed |
-| `src/networking-lab.gresource.xml` `prefix` | slashed |
+| `src/ui/application.vala` `resource_base_path` | slashed |
+| `src/ui/networking-lab.gresource.xml` `prefix` | slashed |
 | `[GtkTemplate (ui = ...)]` in `window.vala`, `preferences-dialog.vala` | slashed + filename |
 | `data/io.github.fwilhe2.NetworkingLab.gschema.xml` schema `id` and `path` | dotted and slashed |
 | `data/` filenames, icon filenames, `.desktop` `Icon=` | dotted |
@@ -75,11 +90,11 @@ macro. Adding a build-time constant means editing both files.
 
 ### Adding a .ui file takes three edits
 
-1. `src/networking-lab.gresource.xml` — bundle it into the binary
+1. `src/ui/networking-lab.gresource.xml` — bundle it into the binary
 2. `po/POTFILES` — so its strings get extracted
-3. `src/meson.build` — only when a matching `.vala` is added
+3. `src/ui/meson.build` — only when a matching `.vala` is added
 
-valac type-checks `[GtkTemplate]` and `[GtkChild]` only because `src/meson.build` passes
+valac type-checks `[GtkTemplate]` and `[GtkChild]` only because `src/ui/meson.build` passes
 `--gresources=`. Without that flag a wrong child id becomes a runtime failure instead of a
 compile error.
 
@@ -92,7 +107,7 @@ compile error.
 
 ## Expected build warnings — do not "fix"
 
-Four `-Wincompatible-pointer-types` warnings pointing at `src/application.vala` are
+Four `-Wincompatible-pointer-types` warnings pointing at `src/ui/application.vala` are
 unavoidable. valac emits `#pragma GCC diagnostic warning "-Wincompatible-pointer-types"`
 into its generated C, which outranks any `-Wno-` flag on the command line. They are
 const-correctness artifacts of generated code, not defects in the Vala source. Every other
@@ -102,7 +117,7 @@ baseline, not regressions.
 ## Runtime notes
 
 - `meson devenv` is required to run uninstalled — it puts the compiled schema on the
-  GSettings path. Running `_build/src/networking-lab` directly aborts with
+  GSettings path. Running `_build/src/ui/networking-lab` directly aborts with
   `Settings schema 'io.github.fwilhe2.NetworkingLab' is not installed` (exit 133). The dev container
   exports `GSETTINGS_SCHEMA_DIR` itself, so the bare binary does run there.
 - The app icon only resolves after a real install; uninstalled runs fall back.

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.12"/>
+  <requires lib="libadwaita" version="1.5"/>
+
+  <template class="NetworkingLabWindow" parent="AdwApplicationWindow">
+    <property name="title" translatable="yes">Networking Lab</property>
+    <property name="default-width">1100</property>
+    <property name="default-height">720</property>
+    <!-- HIG: 360x294 is the phone form factor apps should scale down to. -->
+    <property name="width-request">360</property>
+    <property name="height-request">294</property>
+
+    <property name="content">
+      <object class="AdwToastOverlay" id="toast_overlay">
+        <property name="child">
+          <object class="AdwToolbarView">
+
+            <child type="top">
+              <object class="AdwHeaderBar" id="header_bar">
+                <child type="end">
+                  <object class="GtkMenuButton">
+                    <property name="primary">True</property>
+                    <property name="icon-name">open-menu-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Main Menu</property>
+                    <property name="menu-model">primary_menu</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <property name="content">
+              <!-- Replaced by the palette, canvas and properties panel in phase 5. -->
+              <object class="AdwStatusPage">
+                <property name="icon-name">io.github.fwilhe2.NetworkingLab</property>
+                <property name="title" translatable="yes">Networking Lab</property>
+                <property name="description" translatable="yes">Draw a network topology and compile it into a docker compose file.</property>
+              </object>
+            </property>
+
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+
+  <!-- HIG: the primary menu holds app-level, not view-level, items. -->
+  <menu id="primary_menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Preferences</attribute>
+        <attribute name="action">app.preferences</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_About Networking Lab</attribute>
+        <attribute name="action">app.about</attribute>
+      </item>
+    </section>
+  </menu>
+</interface>

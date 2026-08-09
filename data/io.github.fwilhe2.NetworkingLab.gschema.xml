@@ -17,11 +17,5 @@
       <summary>Whether the window is maximized</summary>
     </key>
 
-    <key name="demo-setting" type="b">
-      <default>false</default>
-      <summary>Demo setting</summary>
-      <description>An example boolean, bound to a switch row in both the main window and the preferences dialog.</description>
-    </key>
-
   </schema>
 </schemalist>

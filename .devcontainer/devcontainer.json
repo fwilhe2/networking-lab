@@ -51,7 +51,7 @@
     "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
     "GDK_BACKEND": "wayland,x11",
     // What `meson devenv` would set. Having it in the environment means the
-    // debugger, the tasks and a plain `_build/src/networking-lab` all find the compiled
+    // debugger, the tasks and a plain `_build/src/ui/networking-lab` all find the compiled
     // GSettings schema; without it the app aborts during window construction.
     "GSETTINGS_SCHEMA_DIR": "${containerWorkspaceFolder}/_build/data"
   },

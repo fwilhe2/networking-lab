@@ -1,7 +1,7 @@
 data/io.github.fwilhe2.NetworkingLab.desktop.in
 data/io.github.fwilhe2.NetworkingLab.metainfo.xml.in
-src/application.vala
-src/preferences-dialog.vala
-src/window.vala
-src/preferences-dialog.ui
-src/window.ui
+src/ui/application.vala
+src/ui/preferences-dialog.vala
+src/ui/window.vala
+src/ui/preferences-dialog.ui
+src/ui/window.ui

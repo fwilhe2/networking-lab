@@ -13,14 +13,7 @@
         <child>
           <object class="AdwPreferencesGroup">
             <property name="title" translatable="yes">Appearance</property>
-
-            <child>
-              <object class="AdwSwitchRow" id="demo_row">
-                <property name="title" translatable="yes">Demo Setting</property>
-                <property name="subtitle" translatable="yes">The same GSettings key the main window binds to</property>
-              </object>
-            </child>
-
+            <!-- The theme override of SPEC 8.7 lands here in phase 7. -->
           </object>
         </child>
 
