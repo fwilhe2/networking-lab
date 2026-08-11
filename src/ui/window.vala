@@ -11,7 +11,10 @@ namespace NetworkingLab {
     public class Window : Adw.ApplicationWindow {
 
         [GtkChild] private unowned Adw.ToastOverlay toast_overlay;
-        [GtkChild] private unowned Gtk.Box columns;
+        [GtkChild] private unowned Adw.OverlaySplitView palette_split;
+        [GtkChild] private unowned Adw.OverlaySplitView properties_split;
+        [GtkChild] private unowned Gtk.ToggleButton palette_toggle;
+        [GtkChild] private unowned Gtk.ToggleButton properties_toggle;
         [GtkChild] private unowned Gtk.ScrolledWindow canvas_scroller;
         [GtkChild] private unowned Gtk.Button zoom_reset_button;
         [GtkChild] private unowned Gtk.ToggleButton select_mode_button;
@@ -45,8 +48,9 @@ namespace NetworkingLab {
             canvas_scroller.child = canvas;
 
             properties = new Properties (document);
-            columns.prepend (new Palette ());
-            columns.append (properties);
+            palette_split.sidebar = new Palette ();
+            properties_split.sidebar = properties;
+            bind_sidebar_toggles ();
 
             /* The panel shows derived values — interface lists, connected
                devices — so it has to follow the document, not just selection. */
@@ -65,10 +69,33 @@ namespace NetworkingLab {
                 }
             });
 
-            /* Until loading and autosave land in phase 7, the demo is what
-               there is to look at. */
-            document.replace (demo_state ());
-            report (_("Demo topology loaded."));
+            /* The last session, if there was one. A first run starts empty —
+               the demo is one menu item away (SPEC 7). */
+            if (document.load_autosave ()) {
+                report (_("Restored the last session."));
+            } else {
+                report (_("Drag a device from the palette to start."));
+            }
+
+            /* The autosave is written on a timeout, so the last edit of the
+               session would otherwise be lost on close. */
+            close_request.connect (() => {
+                document.flush_autosave ();
+                return false;
+            });
+        }
+
+        /* A collapsed sidebar is reachable only through its toggle, so the
+           toggles appear exactly when the breakpoint takes the sidebar away. */
+        private void bind_sidebar_toggles () {
+            palette_split.bind_property ("collapsed", palette_toggle, "visible",
+                                         BindingFlags.SYNC_CREATE);
+            palette_split.bind_property ("show-sidebar", palette_toggle, "active",
+                                         BindingFlags.SYNC_CREATE | BindingFlags.BIDIRECTIONAL);
+            properties_split.bind_property ("collapsed", properties_toggle, "visible",
+                                            BindingFlags.SYNC_CREATE);
+            properties_split.bind_property ("show-sidebar", properties_toggle, "active",
+                                            BindingFlags.SYNC_CREATE | BindingFlags.BIDIRECTIONAL);
         }
 
         private void install_actions () {
@@ -81,12 +108,13 @@ namespace NetworkingLab {
             add_simple_action ("duplicate", () => document.duplicate_selection ());
             add_simple_action ("select-mode", () => set_link_mode (false));
             add_simple_action ("link-mode", () => set_link_mode (true));
-            add_simple_action ("load-demo", () => {
-                document.replace (demo_state ());
-                report (_("Demo topology loaded."));
-            });
+            add_simple_action ("load-demo", () => confirm_load_demo ());
             add_simple_action ("clear", () => confirm_clear ());
             add_simple_action ("cancel", () => on_escape ());
+            add_simple_action ("generate", () => new GenerateDialog (document).present (this));
+            add_simple_action ("shortcuts", () => new ShortcutsDialog ().present (this));
+            add_simple_action ("import", () => on_import ());
+            add_simple_action ("export", () => on_export ());
         }
 
         private delegate void ActionCallback ();
@@ -115,6 +143,107 @@ namespace NetworkingLab {
             report (active
                 ? _("Link mode: click two devices to connect them.")
                 : _("Select mode."));
+        }
+
+        /* ── import / export (SPEC 7) ───────────────────────────────── */
+
+        private void on_import () {
+            var dialog = new Gtk.FileDialog ();
+            dialog.title = _("Import Topology");
+            dialog.modal = true;
+            dialog.filters = topology_filters ();
+
+            dialog.open.begin (this, null, (source, res) => {
+                File file;
+                try {
+                    file = dialog.open.end (res);
+                } catch (Error e) {
+                    /* Dismissing the chooser is not a failure worth reporting. */
+                    if (!(e is Gtk.DialogError.DISMISSED)) {
+                        report_toast (_("Import failed: %s").printf (e.message));
+                    }
+                    return;
+                }
+
+                try {
+                    /* load_bytes, not load_contents: valac's binding for the
+                       latter hands g_file_load_contents a guint8** where it
+                       wants char**, which would add a fifth compiler warning
+                       to the baseline documented in CLAUDE.md. The length is
+                       passed explicitly because a GBytes is not guaranteed to
+                       be NUL-terminated. */
+                    var data = file.load_bytes (null, null).get_data ();
+                    var text = data == null ? "" : ((string) data).substring (0, data.length);
+                    var dropped = document.import_json (text);
+                    var name = file.get_basename ();
+                    report_toast (dropped > 0
+                        ? ngettext ("Imported %s — skipped %d invalid entry.",
+                                    "Imported %s — skipped %d invalid entries.",
+                                    dropped).printf (name, dropped)
+                        : _("Imported %s.").printf (name));
+                } catch (Error e) {
+                    report_toast (_("Import failed: %s").printf (e.message));
+                }
+            });
+        }
+
+        private void on_export () {
+            var dialog = new Gtk.FileDialog ();
+            dialog.title = _("Export Topology");
+            dialog.modal = true;
+            dialog.initial_name = "%s.netlab.json".printf (document.state.project_name);
+            dialog.filters = topology_filters ();
+
+            dialog.save.begin (this, null, (source, res) => {
+                try {
+                    var file = dialog.save.end (res);
+                    write_text (file, to_json (document.state));
+                    report_toast (_("Exported %s.").printf (file.get_basename ()));
+                } catch (Error e) {
+                    if (!(e is Gtk.DialogError.DISMISSED)) {
+                        report_toast (_("Export failed: %s").printf (e.message));
+                    }
+                }
+            });
+        }
+
+        private ListStore topology_filters () {
+            var topologies = new Gtk.FileFilter ();
+            topologies.name = _("Topologies");
+            topologies.add_suffix ("json");
+
+            var filters = new ListStore (typeof (Gtk.FileFilter));
+            filters.append (topologies);
+            return filters;
+        }
+
+        /* ── confirmations ──────────────────────────────────────────── */
+
+        private void confirm_load_demo () {
+            if (document.state.nodes.length == 0) {
+                load_demo ();
+                return;
+            }
+
+            var dialog = new Adw.AlertDialog (
+                _("Replace the topology with the demo?"),
+                _("The current devices and links are replaced. This can be undone."));
+            dialog.add_response ("cancel", _("Cancel"));
+            dialog.add_response ("replace", _("Replace"));
+            dialog.set_response_appearance ("replace", Adw.ResponseAppearance.DESTRUCTIVE);
+            dialog.default_response = "cancel";
+            dialog.close_response = "cancel";
+            dialog.response.connect ((response) => {
+                if (response == "replace") {
+                    load_demo ();
+                }
+            });
+            dialog.present (this);
+        }
+
+        private void load_demo () {
+            document.replace (demo_state ());
+            report (_("Demo topology loaded."));
         }
 
         private void confirm_clear () {

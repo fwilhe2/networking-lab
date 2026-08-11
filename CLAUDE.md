@@ -116,10 +116,18 @@ baseline, not regressions.
 
 ## Driving the UI
 
-`tools/run-app.sh --x11 &` then `tools/drive.py <scenario>` clicks the canvas over
-XTEST and screenshots the window. The canvas is a single Cairo-drawn widget, so no
-part of it is reachable through the accessibility tree — coordinates are the only
-handle. Three things there are not obvious, and each cost real time before it was
+`tools/run-app.sh --x11 --demo &` then `tools/drive.py <scenario>` clicks the canvas
+over XTEST and screenshots the window. The canvas is a single Cairo-drawn widget, so
+no part of it is reachable through the accessibility tree — coordinates are the only
+handle. `--demo` is needed because the app restores the last session at startup
+rather than loading the demo; it seeds the autosave inside a throwaway
+`XDG_DATA_HOME`, so a driving session cannot overwrite the real one. Menu items are
+reached with `App.menu()`, which opens the primary menu with `F10` and walks it with
+the arrow keys — a popover's coordinates move with the window size. The file chooser
+is deliberately not driven: it is a separate toplevel, so a screenshot would capture
+the window behind it and then steal its focus.
+
+Three things there are not obvious, and each cost real time before it was
 understood:
 
 - **`import` takes the input focus with it.** Every synthetic event after a
@@ -137,6 +145,14 @@ minimum width becomes the panel's, and a `GtkScrolledWindow` with `hscrollbar-po
 NEVER` adopts its child's full natural width. All three squeezed the canvas out of
 the window at some point.
 
+The three columns are two nested `AdwOverlaySplitView`s, collapsed by two
+`AdwBreakpoint`s in `window.ui`. Two rules govern them: when several breakpoints
+apply libadwaita uses the **last** one, so the wider condition has to be declared
+first; and a setter's value is **reverted** when its breakpoint stops applying,
+which is what brings the sidebars back on widening. `min-sidebar-width` and
+`max-sidebar-width` are pinned to the same value for the palette because the default
+width fraction would otherwise stretch it.
+
 ## Runtime notes
 
 - `meson devenv` is required to run uninstalled — it puts the compiled schema on the
@@ -144,6 +160,10 @@ the window at some point.
   `Settings schema 'io.github.fwilhe2.NetworkingLab' is not installed` (exit 133). The dev container
   exports `GSETTINGS_SCHEMA_DIR` itself, so the bare binary does run there.
 - The app icon only resolves after a real install; uninstalled runs fall back.
+- The session is autosaved to `$XDG_DATA_HOME/networking-lab/autosave.netlab.json` and
+  restored at startup, so a run picks up whatever the previous one left behind. It goes
+  back through `normalize_state`, exactly like an imported file — the copy on disk is as
+  hand-editable as any other. A failure starts empty rather than reporting.
 - `gnome.post_install()` skips schema compilation and icon caching when `DESTDIR` is set.
   The `Containerfile` compensates by running `glib-compile-schemas` and
   `gtk4-update-icon-cache` against the staged tree — keep that in sync if install rules change.

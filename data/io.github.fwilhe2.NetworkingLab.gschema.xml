@@ -17,5 +17,18 @@
       <summary>Whether the window is maximized</summary>
     </key>
 
+    <!-- Kept apart from the topology, so importing or clearing a lab never
+         changes the appearance. -->
+    <key name="color-scheme" type="s">
+      <choices>
+        <choice value="default"/>
+        <choice value="light"/>
+        <choice value="dark"/>
+      </choices>
+      <default>'default'</default>
+      <summary>Colour scheme</summary>
+      <description>Whether to follow the system colour scheme, or force light or dark.</description>
+    </key>
+
   </schema>
 </schemalist>

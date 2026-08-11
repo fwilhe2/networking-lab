@@ -98,6 +98,45 @@
             <property name="action">action(win.cancel)</property>
           </object>
         </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">g</property>
+            <property name="action">action(win.generate)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
+            <property name="trigger">question</property>
+            <property name="action">action(win.shortcuts)</property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <!--
+      The three columns of SPEC 8.1 are fixed-width there; here they collapse
+      into overlays on a narrow window, which is what the HIG asks for. The
+      setters revert when the breakpoint stops applying, so widening the window
+      brings both sidebars back. The wider condition has to come first: when
+      several apply, libadwaita uses the last one.
+    -->
+    <child>
+      <object class="AdwBreakpoint">
+        <condition>max-width: 900sp</condition>
+        <setter object="properties_split" property="collapsed">True</setter>
+        <setter object="properties_split" property="show-sidebar">False</setter>
+      </object>
+    </child>
+    <child>
+      <object class="AdwBreakpoint">
+        <condition>max-width: 700sp</condition>
+        <setter object="properties_split" property="collapsed">True</setter>
+        <setter object="properties_split" property="show-sidebar">False</setter>
+        <setter object="palette_split" property="collapsed">True</setter>
+        <setter object="palette_split" property="show-sidebar">False</setter>
+        <!-- Three buttons and a percentage no longer fit beside two sidebar
+             toggles. Ctrl +/-, Ctrl+0 and Ctrl+wheel still zoom. -->
+        <setter object="zoom_box" property="visible">False</setter>
       </object>
     </child>
 
@@ -108,6 +147,13 @@
 
             <child type="top">
               <object class="AdwHeaderBar" id="header_bar">
+
+                <child type="start">
+                  <object class="GtkToggleButton" id="palette_toggle">
+                    <property name="icon-name">sidebar-show-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Show Palette</property>
+                  </object>
+                </child>
 
                 <child type="start">
                   <object class="GtkBox">
@@ -158,7 +204,14 @@
                 </child>
 
                 <child type="end">
-                  <object class="GtkBox">
+                  <object class="GtkToggleButton" id="properties_toggle">
+                    <property name="icon-name">sidebar-show-right-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Show Properties</property>
+                  </object>
+                </child>
+
+                <child type="end">
+                  <object class="GtkBox" id="zoom_box">
                     <property name="css-classes">linked</property>
                     <child>
                       <object class="GtkButton">
@@ -185,19 +238,42 @@
                   </object>
                 </child>
 
+                <child type="end">
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">_Generate</property>
+                    <property name="use-underline">True</property>
+                    <property name="tooltip-text" translatable="yes">Generate the compose file (G)</property>
+                    <property name="action-name">win.generate</property>
+                    <property name="css-classes">suggested-action</property>
+                  </object>
+                </child>
+
               </object>
             </child>
 
             <property name="content">
-              <!-- palette | canvas | properties; made adaptive in phase 7 -->
-              <object class="GtkBox" id="columns">
-                <property name="orientation">horizontal</property>
-                <child>
-                  <object class="GtkScrolledWindow" id="canvas_scroller">
-                    <property name="hexpand">True</property>
-                    <property name="vexpand">True</property>
+              <!--
+                palette | canvas | properties. The sidebars are filled from
+                window.vala, so they carry no child here.
+              -->
+              <object class="AdwOverlaySplitView" id="palette_split">
+                <!-- Pinned: the width fraction would otherwise stretch the
+                     palette to the 180 default at this window size. -->
+                <property name="min-sidebar-width">132</property>
+                <property name="max-sidebar-width">132</property>
+                <property name="content">
+                  <object class="AdwOverlaySplitView" id="properties_split">
+                    <property name="sidebar-position">end</property>
+                    <property name="min-sidebar-width">300</property>
+                    <property name="max-sidebar-width">380</property>
+                    <property name="content">
+                      <object class="GtkScrolledWindow" id="canvas_scroller">
+                        <property name="hexpand">True</property>
+                        <property name="vexpand">True</property>
+                      </object>
+                    </property>
                   </object>
-                </child>
+                </property>
               </object>
             </property>
 
@@ -226,6 +302,16 @@
   <menu id="primary_menu">
     <section>
       <item>
+        <attribute name="label" translatable="yes">_Import…</attribute>
+        <attribute name="action">win.import</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Export…</attribute>
+        <attribute name="action">win.export</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
         <attribute name="label" translatable="yes">Load _Demo</attribute>
         <attribute name="action">win.load-demo</attribute>
       </item>
@@ -235,6 +321,10 @@
       </item>
     </section>
     <section>
+      <item>
+        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
+        <attribute name="action">win.shortcuts</attribute>
+      </item>
       <item>
         <attribute name="label" translatable="yes">_Preferences</attribute>
         <attribute name="action">app.preferences</attribute>

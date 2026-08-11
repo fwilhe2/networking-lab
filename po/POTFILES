@@ -1,7 +1,13 @@
 data/io.github.fwilhe2.NetworkingLab.desktop.in
 data/io.github.fwilhe2.NetworkingLab.metainfo.xml.in
 src/ui/application.vala
+src/ui/canvas.vala
+src/ui/document.vala
+src/ui/generate-dialog.vala
+src/ui/palette.vala
 src/ui/preferences-dialog.vala
+src/ui/properties.vala
+src/ui/shortcuts-dialog.vala
 src/ui/window.vala
 src/ui/preferences-dialog.ui
 src/ui/window.ui

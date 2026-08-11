@@ -7,6 +7,8 @@ namespace NetworkingLab {
 
     public class Application : Adw.Application {
 
+        private GLib.Settings settings;
+
         public Application () {
             Object (
                 application_id: Config.APP_ID,
@@ -32,6 +34,33 @@ namespace NetworkingLab {
             set_accels_for_action ("app.preferences", { "<primary>comma" });
             set_accels_for_action ("app.quit", { "<primary>q" });
             set_accels_for_action ("window.close", { "<primary>w" });
+        }
+
+        /* Not construct: Adw.StyleManager is only usable once Adw.Application
+         * has run adw_init, which happens in the chained-up startup. */
+        public override void startup () {
+            base.startup ();
+
+            settings = new GLib.Settings (Config.APP_ID);
+            settings.changed["color-scheme"].connect (apply_color_scheme);
+            apply_color_scheme ();
+        }
+
+        /* SPEC 8.7 pins light and ignores the system preference; the HIG does
+         * not, so the default follows the system and the override is a
+         * preference — see PLAN.md. */
+        private void apply_color_scheme () {
+            switch (settings.get_string ("color-scheme")) {
+                case "light":
+                    Adw.StyleManager.get_default ().color_scheme = Adw.ColorScheme.FORCE_LIGHT;
+                    break;
+                case "dark":
+                    Adw.StyleManager.get_default ().color_scheme = Adw.ColorScheme.FORCE_DARK;
+                    break;
+                default:
+                    Adw.StyleManager.get_default ().color_scheme = Adw.ColorScheme.DEFAULT;
+                    break;
+            }
         }
 
         public override void activate () {

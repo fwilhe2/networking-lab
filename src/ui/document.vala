@@ -31,6 +31,8 @@ namespace NetworkingLab {
         private GenericArray<string> past = new GenericArray<string> ();
         private GenericArray<string> future = new GenericArray<string> ();
 
+        private uint autosave_source = 0;
+
         /* The document changed and the drawing is stale. */
         public signal void changed ();
         /* The selection changed and the properties panel is stale. */
@@ -43,6 +45,95 @@ namespace NetworkingLab {
 
         public Document () {
             state = new State ();
+            changed.connect (schedule_autosave);
+        }
+
+        /* ── autosave (SPEC 7) ──────────────────────────────────────── */
+
+        /* A drag emits `changed` on every motion event, so the write is
+         * coalesced rather than done inline; the document is the same few
+         * kilobytes either way, but the syscalls are not. */
+        private const uint AUTOSAVE_DELAY_MS = 400;
+
+        public static string autosave_path () {
+            return Path.build_filename (Environment.get_user_data_dir (),
+                                        "networking-lab", "autosave.netlab.json");
+        }
+
+        private void schedule_autosave () {
+            if (autosave_source != 0) {
+                return;
+            }
+            autosave_source = Timeout.add (AUTOSAVE_DELAY_MS, () => {
+                autosave_source = 0;
+                write_autosave ();
+                return Source.REMOVE;
+            });
+        }
+
+        /* Called when the window closes: the pending timeout would otherwise
+         * lose the last edit of the session. */
+        public void flush_autosave () {
+            if (autosave_source == 0) {
+                return;
+            }
+            Source.remove (autosave_source);
+            autosave_source = 0;
+            write_autosave ();
+        }
+
+        private void write_autosave () {
+            var path = autosave_path ();
+            try {
+                var parent = File.new_for_path (path).get_parent ();
+                if (parent != null && !parent.query_exists ()) {
+                    parent.make_directory_with_parents ();
+                }
+                FileUtils.set_contents (path, to_json (state));
+            } catch (Error e) {
+                /* Losing the autosave costs the session, not the document. */
+                warning ("could not autosave to %s: %s", path, e.message);
+            }
+        }
+
+        /* Startup. Normalized like any other input, because the file on disk is
+         * as hand-editable as an imported one. A failure starts empty. */
+        public bool load_autosave () {
+            string text;
+            try {
+                FileUtils.get_contents (autosave_path (), out text);
+                state = normalize_json (text);
+            } catch (Error e) {
+                return false;
+            }
+
+            clear_selection_state ();
+            changed ();
+            selection_changed ();
+            return true;
+        }
+
+        /* ── import (SPEC 7) ────────────────────────────────────────── */
+
+        /* Returns how many entries normalization dropped, so the caller can say
+         * so: a file that silently loses half its links is worse than one that
+         * is refused. */
+        public int import_json (string text) throws Error {
+            var parser = new Json.Parser ();
+            parser.load_from_data (text, -1);
+
+            var raw = parser.get_root ();
+            var next = normalize_state (raw);
+            var dropped = raw_length (raw, "nodes") - next.nodes.length
+                        + raw_length (raw, "links") - next.links.length;
+
+            replace (next);
+            return int.max (dropped, 0);
+        }
+
+        private int raw_length (Json.Node? raw, string member) {
+            /* normalize_state has already established both members are arrays. */
+            return (int) raw.get_object ().get_array_member (member).get_length ();
         }
 
         /* ── history ────────────────────────────────────────────────── */

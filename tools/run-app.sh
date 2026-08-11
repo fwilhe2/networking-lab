@@ -14,6 +14,11 @@
 # Pass --x11 to force the X11 backend, which is what tools/drive.py needs in
 # order to find and screenshot the window.
 #
+# Pass --demo to start with the demo topology loaded. It works by seeding the
+# autosave, in a throwaway XDG_DATA_HOME so that a driving session cannot
+# overwrite the real one — the app restores the last session at startup and has
+# no command line of its own.
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 set -eu
@@ -36,10 +41,26 @@ fi
 GSETTINGS_SCHEMA_DIR=$(cd "$build_dir/data" && pwd)
 export GSETTINGS_SCHEMA_DIR
 
+demo=false
 for arg do
     case $arg in
-        --x11) export GDK_BACKEND=x11; shift ;;
+        --x11)  export GDK_BACKEND=x11; shift ;;
+        --demo) demo=true; shift ;;
     esac
 done
+
+if $demo; then
+    data_dir=$(mktemp -d -t netlab-run-XXXXXX)
+    trap 'rm -rf "$data_dir"' EXIT INT TERM
+    mkdir -p "$data_dir/networking-lab"
+    # The demo document as it is embedded in the core library, so this cannot
+    # drift into being a second copy of the topology.
+    sed -n '/^{$/,/^}$/p' src/core/demo.vala \
+        > "$data_dir/networking-lab/autosave.netlab.json"
+    XDG_DATA_HOME=$data_dir
+    export XDG_DATA_HOME
+    "$binary" "$@"
+    exit $?
+fi
 
 exec "$binary" "$@"

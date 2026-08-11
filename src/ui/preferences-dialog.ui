@@ -13,7 +13,21 @@
         <child>
           <object class="AdwPreferencesGroup">
             <property name="title" translatable="yes">Appearance</property>
-            <!-- The theme override of SPEC 8.7 lands here in phase 7. -->
+            <child>
+              <object class="AdwComboRow" id="color_scheme_row">
+                <property name="title" translatable="yes">Colour Scheme</property>
+                <property name="subtitle" translatable="yes">Kept separately from the topology</property>
+                <property name="model">
+                  <object class="GtkStringList">
+                    <items>
+                      <item translatable="yes">Follow the system</item>
+                      <item translatable="yes">Light</item>
+                      <item translatable="yes">Dark</item>
+                    </items>
+                  </object>
+                </property>
+              </object>
+            </child>
           </object>
         </child>
 

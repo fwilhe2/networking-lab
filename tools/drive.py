@@ -8,8 +8,13 @@ only way to check things like "does the rubber band follow the cursor" or "is
 the selection ring where the device is".
 
     meson compile -C _build
-    tools/run-app.sh --x11 &
+    tools/run-app.sh --x11 --demo &
     tools/drive.py select drag link
+
+Every scenario below clicks the demo topology's devices, so the app has to be
+started with `--demo`: it restores the last session at startup rather than
+loading the demo, and driving the menu item instead would mean answering the
+"replace the topology?" confirmation only sometimes.
 
 Requirements: python3-xlib, ImageMagick (`import`), and an X11 or XWayland
 display. The app must be running under the X11 backend — a Wayland client has
@@ -24,6 +29,10 @@ Three traps, all of which cost real debugging time before they were understood:
   * Coordinates are window-relative, and the canvas origin depends on the
     palette width and header height. Pass --canvas-origin if the layout moves;
     the default was measured against a device of known document position.
+
+The file chooser is deliberately not driven from here. It is a separate
+toplevel, so shot() would capture the window behind it and then take the focus
+away from it; and it is GTK's widget rather than this project's code.
 
 SPDX-License-Identifier: GPL-3.0-or-later
 """
@@ -40,6 +49,11 @@ except ImportError:
     sys.exit("python3-xlib is not installed: apt-get install python3-xlib")
 
 WINDOW_TITLE = "Networking Lab"
+
+# The primary menu, top to bottom. Only the order matters: menu() walks it with
+# the arrow keys, because a popover's coordinates depend on the window size.
+MENU_ITEMS = ["Import", "Export", "Load Demo", "Clear",
+              "Keyboard Shortcuts", "Preferences", "About"]
 
 # Where document (0,0) sits inside the captured window image. Measured from a
 # device of known position — pc1 in the demo topology is at 120,260.
@@ -125,7 +139,7 @@ class App:
         d.sync()
         time.sleep(0.3)
 
-    def key(self, name, shift=False, ctrl=False):
+    def key(self, name, shift=False, ctrl=False, settle=0.25):
         code = d.keysym_to_keycode(XK.string_to_keysym(name))
         mods = []
         if ctrl:
@@ -139,11 +153,33 @@ class App:
         for m in reversed(mods):
             xtest.fake_input(d, X.KeyRelease, m)
         d.sync()
-        time.sleep(0.25)
+        time.sleep(settle)
 
     def drop_device(self, kind, x, y):
         """Drag a palette item onto a document position."""
         self.drag(*self.win_xy(*PALETTE[kind]), *self.doc_xy(x, y))
+
+    def menu(self, item):
+        """Activate an item of the primary menu, by name.
+
+        F10 opens it because the header's GtkMenuButton has primary=True, and
+        the keyboard walks it: a popover's item coordinates depend on the
+        window size and the theme, so clicking them is not reproducible.
+
+        Opening the menu already focuses its first item, so reaching item N
+        takes N presses, not N + 1.
+        """
+        self.key("F10")
+        for _ in range(MENU_ITEMS.index(item)):
+            self.key("Down")
+        self.key("Return")
+
+    def resize(self, width, height):
+        """Resize the window, which is how the breakpoints are exercised."""
+        self.win.configure(width=width, height=height)
+        d.sync()
+        time.sleep(0.5)
+        self.width, self.height = width, height
 
     # ── output ──────────────────────────────────────────────────────
 
@@ -205,6 +241,28 @@ def scenario_delete(app):
     app.shot("deleted-r1")
 
 
+def scenario_generate(app):
+    app.key("g")
+    app.shot("generate")
+    app.key("Escape")
+
+
+def scenario_shortcuts(app):
+    app.menu("Keyboard Shortcuts")
+    app.shot("shortcuts")
+    app.key("Escape")
+
+
+def scenario_narrow(app):
+    """The breakpoints: both sidebars become overlays behind their toggles."""
+    app.resize(860, 700)
+    app.shot("narrow-properties-collapsed")
+    app.resize(640, 700)
+    app.shot("narrow-both-collapsed")
+    app.resize(1100, 720)
+    app.shot("wide-again")
+
+
 SCENARIOS = {
     "select": scenario_select,
     "drag": scenario_drag,
@@ -212,6 +270,9 @@ SCENARIOS = {
     "link": scenario_link,
     "refuse": scenario_refuse,
     "delete": scenario_delete,
+    "generate": scenario_generate,
+    "shortcuts": scenario_shortcuts,
+    "narrow": scenario_narrow,
 }
 
 
