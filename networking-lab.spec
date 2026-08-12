@@ -1,6 +1,6 @@
-# RPM packaging for Fedora 44, the current release. Fedora carries GTK 4.20,
-# libadwaita 1.8, Vala 0.56 and VTE 0.82 there, all above the floors in
-# meson.build.
+# RPM packaging for Fedora 44, the current release. Everything meson.build asks
+# for is in the repositories there — the build resolves VTE 0.84, comfortably
+# above the gtk4 >= 4.14 that vte-2.91-gtk4 itself requires.
 #
 # Build it with tools/build-rpm.sh, which runs rpmbuild inside a Fedora
 # container so the host needs nothing but docker.

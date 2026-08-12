@@ -17,7 +17,7 @@ to agree exactly:
 | `debian/changelog` | a new top entry: version, changes, maintainer, date |
 | `networking-lab.spec` | `Version:` **and** a new `%changelog` entry |
 | `data/io.github.fwilhe2.NetworkingLab.metainfo.xml.in` | a new `<release version="…" date="…">` |
-| `README.md` | the example filenames under *Debian package* / *RPM package*, if you quote them |
+| `README.md` | the package filenames in the *Install* section, which are quoted in full |
 
 `tools/build-deb.sh` and `tools/build-rpm.sh` refuse to start when `meson.build` disagrees
 with the changelog or the spec, so those two mismatches are caught in a second rather than
