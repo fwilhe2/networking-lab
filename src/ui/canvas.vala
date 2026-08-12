@@ -88,6 +88,9 @@ namespace NetworkingLab {
 
         public Document document { get; construct; }
 
+        /* Double-clicked: the window opens a terminal on it (PLAN 9.4). */
+        public signal void device_activated (Core.Node node);
+
         /* Set once the window has one. Null until then, and null for good in a
          * build or a sandbox where the lab cannot run — the drawing simply has
          * no marks on it. */
@@ -193,6 +196,15 @@ namespace NetworkingLab {
                 var linking = link_mode || (modifiers & Gdk.ModifierType.SHIFT_MASK) != 0;
                 if (linking) {
                     continue_link (node);
+                    return;
+                }
+
+                /* The first press of the pair already selected it and armed a
+                   drag; the second means "open this", so the drag is called
+                   off rather than left half-started. */
+                if (n_press == 2) {
+                    end_drag ();
+                    device_activated (node);
                     return;
                 }
 

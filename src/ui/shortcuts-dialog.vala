@@ -44,6 +44,8 @@ namespace NetworkingLab {
 
             var lab = group (_("Lab"));
             lab.add (accel_row (_("Open a terminal on the selected device"), "t"));
+            lab.add (text_row (_("Open a terminal on any device"), _("Double-click it")));
+            lab.add (text_row (_("Follow a device's output"), _("The Logs button")));
             lab.add (text_row (_("Start or stop the lab"), _("The Run button")));
             page.add (lab);
 

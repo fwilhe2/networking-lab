@@ -114,6 +114,11 @@ everything version-dependent is behind that one flag inside that one file, so th
 `src/ui/` sees the same `DeviceTerminal` and `TerminalPane` in both builds. Without VTE the
 terminal is an `AdwStatusPage` printing the `docker exec` command to run yourself.
 
+Streamed logs are the same widget with a different command (`docker compose logs -f`), which
+is where their colour, scrollback and working Ctrl+C come from; there is no second log
+viewer to maintain. Tabs are keyed separately from their titles — `logs:r1` is titled
+"r1 logs" — so `TerminalPane.forget ()` looks a page up by identity, not by title.
+
 It is optional because **the GNOME 50 runtime does not ship `vte-2.91-gtk4`** — checked, not
 assumed — and the Flatpak cannot reach the docker socket anyway, so a terminal there would
 be dead weight. Making it required would mean building VTE from source in the manifest to

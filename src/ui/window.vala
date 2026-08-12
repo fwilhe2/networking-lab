@@ -48,6 +48,7 @@ namespace NetworkingLab {
             document.status.connect (report);
 
             canvas = new Canvas (document);
+            canvas.device_activated.connect (open_terminal_for);
             canvas.notify["zoom"].connect (() => {
                 zoom_reset_button.label = canvas.zoom_label ();
             });
@@ -135,6 +136,7 @@ namespace NetworkingLab {
             add_simple_action ("export", () => on_export ());
             add_simple_action ("run-lab", () => on_run_lab ());
             add_simple_action ("open-terminal", () => on_open_terminal ());
+            add_simple_action ("open-logs", () => on_open_logs ());
         }
 
         private delegate void ActionCallback ();
@@ -332,21 +334,58 @@ namespace NetworkingLab {
                 report (_("Select a device first."));
                 return;
             }
+            open_terminal_for ((!) node);
+        }
 
-            if (!((!) node).device_type.is_service ()) {
-                report (_("A switch is a docker network, not a container — there is nothing to log into."));
-                return;
-            }
-
-            var name = ((!) node).name;
-            if (lab.mark_for (name) != DeviceMark.RUNNING) {
-                report_toast (_("%s is not running — start the lab first.").printf (name));
+        /* Also the canvas's double-click, which has a device in hand and no
+           selection to consult. */
+        private void open_terminal_for (Core.Node node) {
+            if (!reachable (node)) {
                 return;
             }
 
             show_terminals ();
-            terminals.open ((!) node);
-            report (_("Terminal on %s.").printf (name));
+            terminals.open (node);
+            report (_("Terminal on %s.").printf (node.name));
+        }
+
+        private void on_open_logs () {
+            var node = document.selected_node ();
+            if (node == null) {
+                report (_("Select a device first."));
+                return;
+            }
+
+            if (!reachable ((!) node)) {
+                return;
+            }
+
+            var command = lab.logs_command (((!) node).name);
+            if (command == null) {
+                report (_("The lab is not running."));
+                return;
+            }
+
+            show_terminals ();
+            terminals.open_logs ((!) node, (!) command);
+            report (_("Logs for %s.").printf (((!) node).name));
+        }
+
+        /* The two refusals every device action shares: a switch is not a
+           container at all, and a device that is not up has nothing to attach
+           to. Saying so beats a tab that dies the moment it opens. */
+        private bool reachable (Core.Node node) {
+            if (!node.device_type.is_service ()) {
+                report (_("A switch is a docker network, not a container — there is nothing to log into."));
+                return false;
+            }
+
+            if (lab.mark_for (node.name) != DeviceMark.RUNNING) {
+                report_toast (_("%s is not running — start the lab first.").printf (node.name));
+                return false;
+            }
+
+            return true;
         }
 
         /* Attached on first use rather than kept empty: a Paned with a

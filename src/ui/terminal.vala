@@ -30,6 +30,9 @@ namespace NetworkingLab {
         return string.joinv (" ", terminal_command (node));
     }
 
+    /* Anything worth watching in a terminal, not just a shell: streamed logs
+     * are the same widget with a different command, which is what makes them
+     * scrollable, colourful and interruptible with Ctrl+C for free. */
     public class DeviceTerminal : Gtk.Box {
 
         public string device_name { get; construct; }
@@ -39,9 +42,9 @@ namespace NetworkingLab {
 
         private string[] command;
 
-        public DeviceTerminal (Core.Node node) {
-            Object (device_name: node.name, orientation: Gtk.Orientation.VERTICAL, spacing: 0);
-            command = terminal_command (node);
+        public DeviceTerminal (string device_name, string[] command) {
+            Object (device_name: device_name, orientation: Gtk.Orientation.VERTICAL, spacing: 0);
+            this.command = command;
             start ();
         }
 
@@ -178,7 +181,7 @@ namespace NetworkingLab {
             append (tabs);
 
             tabs.close_page.connect ((page) => {
-                pages.remove (page.title);
+                forget (page);
                 tabs.close_page_finish (page, true);
                 if (tabs.n_pages == 0) {
                     emptied ();
@@ -188,18 +191,30 @@ namespace NetworkingLab {
         }
 
         public void open (Core.Node node) {
-            var existing = pages.lookup (node.name);
+            open_tab (node.name, node.name, terminal_command (node));
+        }
+
+        /* Logs get their own tab rather than replacing the session: watching a
+         * device and typing at it are two different things, often at once. */
+        public void open_logs (Core.Node node, string[] command) {
+            open_tab ("logs:" + node.name,
+                      _("%s logs").printf (node.name),
+                      command);
+        }
+
+        private void open_tab (string key, string title, string[] command) {
+            var existing = pages.lookup (key);
             if (existing != null) {
                 tabs.selected_page = existing;
                 focus_selected ();
                 return;
             }
 
-            var terminal = new DeviceTerminal (node);
+            var terminal = new DeviceTerminal (title, command);
             var page = tabs.append (terminal);
-            page.title = node.name;
-            page.tooltip = terminal_command_line (node);
-            pages.insert (node.name, page);
+            page.title = title;
+            page.tooltip = string.joinv (" ", command);
+            pages.insert (key, page);
 
             tabs.selected_page = page;
             focus_selected ();
@@ -207,6 +222,20 @@ namespace NetworkingLab {
 
         public bool is_empty () {
             return tabs.n_pages == 0;
+        }
+
+        /* The tab key is not the title — a logs tab is keyed "logs:r1" but
+         * titled "r1 logs" — so the page has to be looked up by identity. */
+        private void forget (Adw.TabPage page) {
+            /* get_keys () rather than foreach (): valac's GHFunc cast for a
+               closure adds a compiler warning to the baseline, and this list is
+               four entries long on a busy day. */
+            foreach (var key in pages.get_keys ()) {
+                if (pages.lookup (key) == page) {
+                    pages.remove (key);
+                    return;
+                }
+            }
         }
 
         private void focus_selected () {

@@ -289,6 +289,7 @@ namespace NetworkingLab {
 
             content.append (label_for (_("Shell")));
             content.append (shell_row (node));
+            content.append (lab_actions (node));
         }
 
         /* ── commit helpers ─────────────────────────────────────────── */
@@ -491,6 +492,31 @@ namespace NetworkingLab {
 
             box.append (label);
             box.append (copy);
+            return box;
+        }
+
+        /* The two things you do with a running device (PLAN 9.4). They stay
+           sensitive whatever the lab is doing: the window's actions know
+           whether the device is up and say so, and a button that greys out
+           between polls is worse than one that answers. */
+        private Gtk.Widget lab_actions (Core.Node node) {
+            var box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 6);
+            box.homogeneous = true;
+            box.margin_top = 6;
+
+            /* "Router CLI" rather than "Terminal" for a router: vtysh is not a
+               shell, and the difference is the first thing that confuses. */
+            var open = new Gtk.Button.with_label (
+                node.device_type == DeviceType.ROUTER ? _("Router CLI") : _("Shell"));
+            open.tooltip_text = _("Open a session on this device (T)");
+            open.clicked.connect (() => activate_action ("win.open-terminal", null));
+
+            var logs = new Gtk.Button.with_label (_("Logs"));
+            logs.tooltip_text = _("Follow this device's output");
+            logs.clicked.connect (() => activate_action ("win.open-logs", null));
+
+            box.append (open);
+            box.append (logs);
             return box;
         }
 

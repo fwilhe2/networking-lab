@@ -151,6 +151,23 @@ namespace NetworkingLab {
             return status.running ? DeviceMark.RUNNING : DeviceMark.STOPPED;
         }
 
+        /* `docker compose logs -f`, addressed the same way every other call is:
+         * by project name and generated file. Run in a terminal rather than
+         * piped into a text view, which is what gives it colour, scrollback and
+         * a working Ctrl+C for nothing (PLAN 9.4). */
+        public string[]? logs_command (string device_name) {
+            if (docker == null || session == null) {
+                return null;
+            }
+
+            return {
+                ((!) docker).program, "compose",
+                "-p", ((!) session).project,
+                "-f", ((!) session).compose_file,
+                "logs", "-f", "--tail", "200", device_name,
+            };
+        }
+
         public string summary () {
             switch (availability) {
                 case Availability.CHECKING:
