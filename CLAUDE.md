@@ -203,6 +203,14 @@ Other things worth knowing before touching either:
 - `po/LINGUAS` is empty, so there are no locale files and the spec has no `%find_lang`.
   Adding the first translation means adding it, or `rpmbuild` fails on unpackaged files.
 - Docker is a `Recommends` in both, deliberately: SPEC's designer half works without it.
+  **Both recommendations name alternatives**, not a single package — `docker.io | docker-ce`
+  and `docker-compose | docker-compose-plugin` on Debian, rich `(a or b)` dependencies on
+  Fedora. This is not tidiness. Recommending only the distribution's own packages makes apt
+  install `docker.io` on a machine running Docker CE from download.docker.com; `docker.io`
+  declares `Conflicts: docker-ce` and pulls `docker-buildx`, whose CLI plugin collides
+  file-for-file with `docker-buildx-plugin`. dpkg aborts mid-transaction, having already
+  removed the working engine — which is exactly what happened the first time this package was
+  installed on such a machine.
 - Lintian reports `no-manual-page`. There is no man page; adding one means a new file, a
   meson install rule and a `%files` entry.
 

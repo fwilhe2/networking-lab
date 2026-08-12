@@ -36,10 +36,14 @@ Requires:       hicolor-icon-theme
 
 # Docker is located at run time and done without: the designer, the compiler
 # and the export all work with no container runtime present, and the run
-# controls explain why they are insensitive. Hence Recommends, and hence no
-# hard dependency on a particular engine — moby-engine and docker-ce both
-# provide `docker`, and podman's docker shim is a third possibility.
-Recommends:     docker-compose
+# controls explain why they are insensitive. Hence Recommends.
+#
+# Rich dependencies rather than a bare package name, for the same reason the
+# Debian package uses alternatives: naming only the distribution's own package
+# makes a machine running docker-ce from download.docker.com pull a second,
+# conflicting stack in order to satisfy a recommendation it already meets.
+Recommends:     (moby-engine or docker-ce)
+Recommends:     (docker-compose or docker-compose-plugin)
 
 %description
 Networking Lab draws a network of routers, switches, PCs and servers, compiles

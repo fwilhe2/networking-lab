@@ -127,6 +127,21 @@ are insensitive. Debian's `docker-compose` is the v2 Go implementation and
 installs the CLI plugin, so `docker compose` — the syntax the generated file
 needs — works.
 
+Both recommendations are alternatives — `docker.io | docker-ce` and
+`docker-compose | docker-compose-plugin` — so a machine already running Docker
+CE from download.docker.com is left alone. Naming only Debian's packages makes
+apt install `docker.io` on such a machine, which `Conflicts: docker-ce` and
+drags in `docker-buildx`, whose CLI plugin collides file-for-file with
+`docker-buildx-plugin`. The install fails half-way and takes the working engine
+with it. If you hit that with an older build of this package:
+
+```sh
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io crun
+sudo systemctl start docker
+```
+
+`/var/lib/docker` is untouched by any of it, so images and volumes survive.
+
 ### RPM package
 
 Targets Fedora 44, the current release; same idea, in a Fedora container.
