@@ -23,14 +23,27 @@ meson test -C _build --print-errorlogs
 meson devenv -C _build networking-lab          # run uninstalled
 ```
 
-Two suites: `data` validates the desktop, AppStream and GSettings files; `core` runs the
-Vala unit tests in `tests/`, which link the core library without GTK.
+Three suites: `data` validates the desktop, AppStream and GSettings files; `core` runs the
+Vala unit tests in `tests/`, which link the core library without GTK; `integration` boots
+the demo lab under docker.
 
 ```sh
 meson test -C _build --suite core
 meson test -C _build --suite data
 meson test -C _build validate-gschema   # or validate-desktop-file, validate-metainfo-file
+meson test -C _build --setup docker --suite integration --print-errorlogs
 ```
+
+`integration` is **excluded from the default run** — `tests/meson.build` declares two test
+setups for exactly that: the default one lists it in `exclude_suites`, and `--setup docker`
+does not. A `--suite integration` without `--setup docker` therefore selects nothing, which
+looks like a typo but is the exclusion working. The one test in it,
+`tests/lab.integration.sh`, generates the demo topology with `netlab-compile --demo`, runs
+`docker compose up`, waits for OSPF to converge and asserts end-to-end reachability plus
+isolation; it takes about 70s warm and several minutes cold, and exits 77 (meson's
+"skipped") when docker or a compose plugin ≥ 2.23.1 is missing. It can also be run
+directly: `tests/lab.integration.sh [path/to/netlab-compile]`. Meson runs tests from the
+build directory and passes that path relative to it, so the script must not `cd`.
 
 `meson compile` reconfigures itself after a `meson.build` edit; `meson setup --wipe _build`
 is only needed when that fails.
