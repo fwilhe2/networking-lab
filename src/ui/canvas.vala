@@ -29,6 +29,10 @@ namespace NetworkingLab {
         Gdk.RGBA switch_;
         Gdk.RGBA pc;
         Gdk.RGBA server;
+        /* Lab marks (PLAN 9.2). Distinct from the device colours: green here
+         * means "this container is up", not "this is a switch". */
+        Gdk.RGBA running;
+        Gdk.RGBA stopped;
 
         public static Gdk.RGBA rgb (string spec) {
             var color = Gdk.RGBA ();
@@ -44,6 +48,7 @@ namespace NetworkingLab {
                     link = rgb ("#5c6672"), accent = rgb ("#4d8fe0"),
                     router = rgb ("#4d8fe0"), switch_ = rgb ("#4fae86"),
                     pc = rgb ("#98a2b0"), server = rgb ("#a98ad6"),
+                    running = rgb ("#57d787"), stopped = rgb ("#e06c6c"),
                 };
             }
 
@@ -53,6 +58,7 @@ namespace NetworkingLab {
                 link = rgb ("#9aa2ac"), accent = rgb ("#2c6bbd"),
                 router = rgb ("#2c6bbd"), switch_ = rgb ("#2f7d5d"),
                 pc = rgb ("#5b6472"), server = rgb ("#7a52a8"),
+                running = rgb ("#2e9e5b"), stopped = rgb ("#c0392b"),
             };
         }
 
@@ -81,6 +87,11 @@ namespace NetworkingLab {
         private const double LINK_HIT_DISTANCE = 7;
 
         public Document document { get; construct; }
+
+        /* Set once the window has one. Null until then, and null for good in a
+         * build or a sandbox where the lab cannot run — the drawing simply has
+         * no marks on it. */
+        public LabController? lab { get; set; default = null; }
 
         private State topology { get { return document.state; } }
 
@@ -464,6 +475,8 @@ namespace NetworkingLab {
                 draw_icon (cr, palette, node);
                 cr.restore ();
 
+                draw_lab_mark (cr, palette, node);
+
                 /* Clear of the r=30 selection ring, which would otherwise
                    strike through the label. */
                 draw_centred_text (cr, node.name, node.x, node.y + 44, 12, palette.text);
@@ -472,6 +485,36 @@ namespace NetworkingLab {
                     draw_centred_text (cr, node.subnet, node.x, node.y + 57, 10.5, palette.muted);
                 }
             }
+        }
+
+        /* A dot on the shoulder of a device whose container exists: green for
+         * running, red for one that exited. A switch is a docker network rather
+         * than a container, so it never carries one.
+         *
+         * The halo is drawn in the background colour so the dot stays legible
+         * where it overlaps the icon (PLAN 9.2). */
+        private void draw_lab_mark (Cairo.Context cr, CanvasColors palette, Core.Node node) {
+            if (lab == null || !node.device_type.is_service ()) {
+                return;
+            }
+
+            var mark = ((!) lab).mark_for (node.name);
+            if (mark == DeviceMark.NONE) {
+                return;
+            }
+
+            var x = node.x + 19;
+            var y = node.y - 19;
+
+            cr.save ();
+            set_source (cr, palette.background);
+            cr.arc (x, y, 6.5, 0, 2 * Math.PI);
+            cr.fill ();
+
+            set_source (cr, mark == DeviceMark.RUNNING ? palette.running : palette.stopped);
+            cr.arc (x, y, 4.5, 0, 2 * Math.PI);
+            cr.fill ();
+            cr.restore ();
         }
 
         /* A solid ring marks the selection; a dashed one marks the device a

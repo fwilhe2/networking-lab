@@ -86,6 +86,19 @@ keeps a container that died on boot from being drawn as running. `container_name
 generated file is what makes a device name and a container name the same string, which is
 the whole basis of `Session.is_running (device)`.
 
+`src/ui/lab-controller.vala` is the only file in `src/ui/` that knows docker exists. It owns
+the probe, one `Lab.Session`, and a 2-second poll that runs **only while a lab is up** — a
+lab that is down changes only when this application starts it, so an idle poll would be a
+subprocess every two seconds for no news. The window asks it two questions: "can I run?"
+(`can_run`, `availability`, `unavailable_reason`) and "is this device up?" (`mark_for`).
+
+Two consequences of the lab being a view rather than part of the document: it is never
+undone or autosaved, and **closing the window does not stop the lab**. The containers are
+adopted again on the next start, which is the point — but a driving session that starts a
+lab leaves it running, even though `tools/run-app.sh --demo` throws its `XDG_DATA_HOME`
+away. The compose file goes with the temp directory; the containers do not. `docker compose
+-p netlab-demo down -v` cleans up.
+
 `tests/lab.vala` writes a stub `docker` into a temp directory and puts it **earlier on
 PATH**; behaviour is driven by `NETLAB_STUB_*` environment variables (compose version,
 daemon reachability, which subcommand fails, canned `ps` output), and every invocation is
@@ -164,7 +177,13 @@ the arrow keys — a popover's coordinates move with the window size. The file c
 is deliberately not driven: it is a separate toplevel, so a screenshot would capture
 the window behind it and then steal its focus.
 
-Three things there are not obvious, and each cost real time before it was
+A screenshot of a window that is not visible — moved off-screen, occluded, on another
+workspace — is the **last frame that was drawn**, not the current state. GTK stops
+redrawing what nobody can see, so `import` happily returns a stale picture of a perfectly
+healthy app. If the UI looks frozen, check `ps -o wchan` first: an idle main loop sits in
+`do_sys_poll`.
+
+Three more things there are not obvious, and each cost real time before it was
 understood:
 
 - **`import` takes the input focus with it.** Every synthetic event after a

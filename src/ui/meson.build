@@ -7,12 +7,14 @@ networking_lab_sources = files(
   'window.vala',
   'canvas.vala',
   'generate-dialog.vala',
+  'lab-controller.vala',
   'shortcuts-dialog.vala',
   'preferences-dialog.vala',
 )
 
 networking_lab_deps = [
   netlab_core_dep,
+  netlab_lab_dep,
   dependency('gtk4',         version: '>= 4.12'),
   dependency('libadwaita-1', version: '>= 1.5'),
 ]

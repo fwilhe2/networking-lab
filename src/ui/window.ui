@@ -248,6 +248,24 @@
                   </object>
                 </child>
 
+                <!--
+                  Run/Stop. One button rather than two: the lab is either up or
+                  it is not, and the label follows the state from window.vala.
+                  It stays insensitive until the docker probe has answered.
+                -->
+                <child type="end">
+                  <object class="GtkButton" id="run_button">
+                    <property name="action-name">win.run-lab</property>
+                    <property name="sensitive">False</property>
+                    <property name="child">
+                      <object class="AdwButtonContent" id="run_button_content">
+                        <property name="icon-name">media-playback-start-symbolic</property>
+                        <property name="label" translatable="yes">Run</property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+
               </object>
             </child>
 
@@ -285,6 +303,16 @@
                   <object class="GtkLabel" id="status_label">
                     <property name="xalign">0</property>
                     <property name="hexpand">True</property>
+                    <property name="ellipsize">end</property>
+                    <property name="css-classes">dim-label caption</property>
+                  </object>
+                </child>
+                <!-- The lab's own state, kept apart from the action feedback
+                     to its left: it persists rather than being replaced by the
+                     next thing that happens (PLAN 9.2). -->
+                <child>
+                  <object class="GtkLabel" id="lab_status_label">
+                    <property name="xalign">1</property>
                     <property name="ellipsize">end</property>
                     <property name="css-classes">dim-label caption</property>
                   </object>

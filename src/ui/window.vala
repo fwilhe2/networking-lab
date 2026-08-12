@@ -20,11 +20,15 @@ namespace NetworkingLab {
         [GtkChild] private unowned Gtk.ToggleButton select_mode_button;
         [GtkChild] private unowned Gtk.ToggleButton link_mode_button;
         [GtkChild] private unowned Gtk.Label status_label;
+        [GtkChild] private unowned Gtk.Label lab_status_label;
+        [GtkChild] private unowned Gtk.Button run_button;
+        [GtkChild] private unowned Adw.ButtonContent run_button_content;
 
         private GLib.Settings settings;
         private Document document;
         private Canvas canvas;
         private Properties properties;
+        private LabController lab;
 
         public Window (Gtk.Application app) {
             Object (application: app);
@@ -47,6 +51,13 @@ namespace NetworkingLab {
             });
             canvas_scroller.child = canvas;
 
+            /* The lab is a view of the document, not part of it: it is never
+               undone, never autosaved, and the designer works without it. */
+            lab = new LabController (document);
+            canvas.lab = lab;
+            lab.changed.connect (on_lab_changed);
+            lab.failed.connect (show_failure);
+
             properties = new Properties (document);
             palette_split.sidebar = new Palette ();
             properties_split.sidebar = properties;
@@ -68,6 +79,8 @@ namespace NetworkingLab {
                     set_link_mode (true);
                 }
             });
+
+            on_lab_changed ();
 
             /* The last session, if there was one. A first run starts empty —
                the demo is one menu item away (SPEC 7). */
@@ -115,6 +128,7 @@ namespace NetworkingLab {
             add_simple_action ("shortcuts", () => new ShortcutsDialog ().present (this));
             add_simple_action ("import", () => on_import ());
             add_simple_action ("export", () => on_export ());
+            add_simple_action ("run-lab", () => on_run_lab ());
         }
 
         private delegate void ActionCallback ();
@@ -215,6 +229,193 @@ namespace NetworkingLab {
             var filters = new ListStore (typeof (Gtk.FileFilter));
             filters.append (topologies);
             return filters;
+        }
+
+        /* ── running the lab (PLAN 9.2) ─────────────────────────────── */
+
+        private void on_run_lab () {
+            if (!lab.can_run) {
+                return;
+            }
+
+            if (lab.state == Lab.LabState.UP) {
+                confirm_stop_lab ();
+                return;
+            }
+
+            var result = compile (document.state);
+
+            var errors = new GenericArray<string> ();
+            for (var i = 0; i < result.warnings.length; i++) {
+                if (result.warnings[i].is_error) {
+                    errors.add (result.warnings[i].message);
+                }
+            }
+
+            if (errors.length == 0) {
+                start_lab (result.yaml);
+                return;
+            }
+
+            /* SPEC 5 keeps warnings from blocking *generation*, and that stays
+               true — the generate dialog still shows the file whatever the
+               diagnostics say. Booting is the case where it is worth asking: a
+               duplicate address or an unreachable gateway costs a minute of
+               pulling and then fails in a way that reads like a docker problem
+               (PLAN 9.2). */
+            var dialog = new Adw.AlertDialog (
+                _("Start the lab despite errors?"),
+                ngettext ("This problem will probably keep the lab from working:",
+                          "These problems will probably keep the lab from working:",
+                          errors.length));
+            dialog.set_extra_child (message_list (errors));
+            dialog.add_response ("cancel", _("Cancel"));
+            dialog.add_response ("start", _("Start Anyway"));
+            dialog.set_response_appearance ("start", Adw.ResponseAppearance.DESTRUCTIVE);
+            dialog.default_response = "cancel";
+            dialog.close_response = "cancel";
+            dialog.response.connect ((response) => {
+                if (response == "start") {
+                    start_lab (result.yaml);
+                }
+            });
+            dialog.present (this);
+        }
+
+        private void start_lab (string yaml) {
+            report (_("Starting the lab — the first run pulls images."));
+            lab.start.begin (yaml, (source, res) => {
+                lab.start.end (res);
+                if (lab.state == Lab.LabState.UP) {
+                    report_toast (_("Lab started."));
+                }
+            });
+        }
+
+        /* `down` destroys containers and networks, and with them anything
+           configured through vtysh and not saved. Worth one question. */
+        private void confirm_stop_lab () {
+            var dialog = new Adw.AlertDialog (
+                _("Stop the lab?"),
+                _("The containers and their networks are removed. Anything configured inside a device and not saved is lost."));
+            dialog.add_response ("cancel", _("Cancel"));
+            dialog.add_response ("stop", _("Stop"));
+            dialog.set_response_appearance ("stop", Adw.ResponseAppearance.DESTRUCTIVE);
+            dialog.default_response = "cancel";
+            dialog.close_response = "cancel";
+            dialog.response.connect ((response) => {
+                if (response != "stop") {
+                    return;
+                }
+                report (_("Stopping the lab…"));
+                lab.stop.begin ((source, res) => {
+                    lab.stop.end (res);
+                    if (lab.state == Lab.LabState.DOWN) {
+                        report_toast (_("Lab stopped."));
+                    }
+                });
+            });
+            dialog.present (this);
+        }
+
+        private void on_lab_changed () {
+            lab_status_label.label = lab.summary ();
+            canvas.queue_draw ();
+
+            var up = lab.state == Lab.LabState.UP;
+
+            run_button.sensitive = lab.can_run;
+            run_button.tooltip_text = run_tooltip ();
+            run_button_content.icon_name = up
+                ? "media-playback-stop-symbolic"
+                : "media-playback-start-symbolic";
+
+            switch (lab.state) {
+                case Lab.LabState.STARTING:
+                    run_button_content.label = _("Starting…");
+                    break;
+                case Lab.LabState.STOPPING:
+                    run_button_content.label = _("Stopping…");
+                    break;
+                case Lab.LabState.UP:
+                    run_button_content.label = _("Stop");
+                    break;
+                default:
+                    run_button_content.label = _("Run");
+                    break;
+            }
+
+            if (up) {
+                run_button.add_css_class ("destructive-action");
+            } else {
+                run_button.remove_css_class ("destructive-action");
+            }
+        }
+
+        private string run_tooltip () {
+            switch (lab.availability) {
+                case LabController.Availability.CHECKING:
+                    return _("Checking whether docker is available…");
+                case LabController.Availability.UNAVAILABLE:
+                    return lab.unavailable_reason;
+                default:
+                    return lab.state == Lab.LabState.UP
+                        ? _("Stop the lab and remove its containers")
+                        : _("Start the lab with docker compose");
+            }
+        }
+
+        /* Docker's own words, not a summary of them: `up` fails for reasons
+           this application cannot anticipate, and the output is the fix. */
+        private void show_failure (string title, string detail) {
+            report (title);
+
+            var dialog = new Adw.AlertDialog (title, null);
+            dialog.set_extra_child (output_view (detail));
+            dialog.add_response ("close", _("Close"));
+            dialog.default_response = "close";
+            dialog.close_response = "close";
+            dialog.present (this);
+        }
+
+        private Gtk.Widget output_view (string text) {
+            var view = new Gtk.TextView ();
+            view.editable = false;
+            view.monospace = true;
+            view.wrap_mode = Gtk.WrapMode.WORD_CHAR;
+            view.top_margin = view.bottom_margin = view.left_margin = view.right_margin = 8;
+            view.buffer.text = text;
+
+            var scroller = new Gtk.ScrolledWindow ();
+            scroller.hscrollbar_policy = Gtk.PolicyType.NEVER;
+            scroller.propagate_natural_height = true;
+            scroller.max_content_height = 260;
+            scroller.width_request = 380;
+            scroller.child = view;
+
+            var frame = new Gtk.Frame (null);
+            frame.child = scroller;
+            return frame;
+        }
+
+        private Gtk.Widget message_list (GenericArray<string> messages) {
+            var list = new Gtk.Box (Gtk.Orientation.VERTICAL, 6);
+
+            for (var i = 0; i < messages.length; i++) {
+                var label = new Gtk.Label ("• " + messages[i]);
+                label.xalign = 0;
+                label.wrap = true;
+                label.add_css_class ("error");
+                list.append (label);
+            }
+
+            var scroller = new Gtk.ScrolledWindow ();
+            scroller.hscrollbar_policy = Gtk.PolicyType.NEVER;
+            scroller.propagate_natural_height = true;
+            scroller.max_content_height = 200;
+            scroller.width_request = 380;
+            scroller.child = list;
+            return scroller;
         }
 
         /* ── confirmations ──────────────────────────────────────────── */

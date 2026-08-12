@@ -4,6 +4,7 @@ src/ui/application.vala
 src/ui/canvas.vala
 src/ui/document.vala
 src/ui/generate-dialog.vala
+src/ui/lab-controller.vala
 src/ui/palette.vala
 src/ui/preferences-dialog.vala
 src/ui/properties.vala
