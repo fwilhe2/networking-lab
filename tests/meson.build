@@ -27,6 +27,20 @@ foreach name : core_tests
   )
 endforeach
 
+# The lab layer, in its own suite because it links netlab_lab_dep as well. It
+# still needs no docker: the test writes a stub `docker` into a temporary
+# directory and puts it earlier on PATH. See PLAN.md 9.1.
+test('lab',
+  executable('test-lab',
+    files('lab.vala'),
+    dependencies: [netlab_core_dep, netlab_lab_dep],
+         install: false,
+  ),
+  suite: 'lab',
+  protocol: 'tap',
+  args: ['--tap'],
+)
+
 # The end-to-end lab test, in its own suite because it needs docker, pulls three
 # images and waits for OSPF to converge. Two test setups keep it out of the way:
 # the default one excludes the suite, so a plain `meson test` stays hermetic and
@@ -37,7 +51,7 @@ endforeach
 add_test_setup('default', exclude_suites: ['integration'], is_default: true)
 add_test_setup('docker')
 
-test('lab', files('lab.integration.sh'),
+test('demo', files('lab.integration.sh'),
        args: [netlab_compile],
     depends: [netlab_compile],
       suite: 'integration',

@@ -1,0 +1,148 @@
+/* docker.vala
+ *
+ * Finding docker and running it. Every call is asynchronous, because `up` on a
+ * cold image cache pulls hundreds of megabytes and takes minutes — blocking the
+ * main loop for that would freeze the window mid-boot.
+ *
+ * Docker is a run-time dependency, never a build-time one. Its absence is an
+ * ordinary, expected outcome that the caller reports; it is not an error the
+ * application is entitled to be surprised by.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+namespace NetworkingLab.Lab {
+
+    public errordomain LabError {
+        NOT_INSTALLED,      /* nothing called docker on PATH */
+        NO_COMPOSE,         /* docker is there, the compose plugin is not */
+        COMPOSE_TOO_OLD,    /* older than COMPOSE_FLOOR */
+        UNAVAILABLE,        /* the daemon did not answer */
+        FAILED,             /* a command exited non-zero */
+        BUSY,               /* the session is already starting or stopping */
+    }
+
+    /* The generated file uses inline `configs.content`, which compose gained in
+     * 2.23.1. Anything older fails in the middle of `up` with a message about
+     * a missing file, which is a confusing way to learn you need an upgrade. */
+    public const string COMPOSE_FLOOR = "2.23.1";
+
+    public class CommandResult : Object {
+        public int status;
+        public string output;
+        public string errors;
+
+        public bool ok {
+            get { return status == 0; }
+        }
+
+        public CommandResult (int status, string output, string errors) {
+            this.status = status;
+            this.output = output;
+            this.errors = errors;
+        }
+
+        /* stderr, falling back to stdout: compose reports progress and failures
+         * on stderr, but `config` and `ps` put their diagnostics on stdout. */
+        public string message () {
+            var text = errors.strip ();
+            if (text == "") {
+                text = output.strip ();
+            }
+            return text == "" ? "exit status %d".printf (status) : text;
+        }
+    }
+
+    public class Docker : Object {
+        public string program { get; private set; }
+        public string compose_version { get; private set; default = ""; }
+
+        private Docker (string program) {
+            this.program = program;
+        }
+
+        /* Locates docker and establishes that it can actually be used: the
+         * plugin exists, it is new enough, and the daemon answers. Each failure
+         * gets its own error code, because the fix differs for each and the
+         * user is the one who has to apply it. */
+        public static async Docker probe (Cancellable? cancellable = null) throws Error {
+            var program = Environment.find_program_in_path ("docker");
+            if (program == null) {
+                throw new LabError.NOT_INSTALLED ("docker was not found on PATH");
+            }
+
+            var docker = new Docker (program);
+
+            var version = yield docker.run ({ "compose", "version", "--short" }, cancellable);
+            if (!version.ok) {
+                throw new LabError.NO_COMPOSE (
+                    "the docker compose plugin is not installed (%s)".printf (version.message ()));
+            }
+
+            var found = version.output.strip ();
+            if (!version_at_least (found, COMPOSE_FLOOR)) {
+                throw new LabError.COMPOSE_TOO_OLD (
+                    "docker compose %s is older than %s, which inline configs need"
+                        .printf (found, COMPOSE_FLOOR));
+            }
+            docker.compose_version = found;
+
+            var info = yield docker.run ({ "info", "--format", "{{.ServerVersion}}" }, cancellable);
+            if (!info.ok) {
+                throw new LabError.UNAVAILABLE (
+                    "the docker daemon is not reachable (%s)".printf (info.message ()));
+            }
+
+            return docker;
+        }
+
+        public async CommandResult run (string[] arguments, Cancellable? cancellable = null) throws Error {
+            string[] command = { program };
+            foreach (var argument in arguments) {
+                command += argument;
+            }
+
+            var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_PIPE);
+            var process = launcher.spawnv (command);
+
+            string? output;
+            string? errors;
+            yield process.communicate_utf8_async (null, cancellable, out output, out errors);
+
+            /* A signalled process has no exit status; -1 keeps `ok` false
+             * without pretending to know which signal it was. */
+            var status = process.get_if_exited () ? process.get_exit_status () : -1;
+            return new CommandResult (status, output ?? "", errors ?? "");
+        }
+
+        public async CommandResult run_checked (string[] arguments, Cancellable? cancellable = null) throws Error {
+            var result = yield run (arguments, cancellable);
+            if (!result.ok) {
+                throw new LabError.FAILED (result.message ());
+            }
+            return result;
+        }
+
+        /* Component-wise, so 5.4.0 is newer than 2.23.1 — which a string
+         * comparison gets right only by accident and gets wrong at 10.x. */
+        public static bool version_at_least (string found, string floor) {
+            var mine = strip_v (found).split (".");
+            var want = strip_v (floor).split (".");
+
+            for (var i = 0; i < want.length; i++) {
+                /* int.parse stops at the first non-digit, so a build suffix
+                 * like "2.29.7-desktop.1" compares as 2.29.7. */
+                var a = i < mine.length ? int.parse (mine[i]) : 0;
+                var b = int.parse (want[i]);
+                if (a != b) {
+                    return a > b;
+                }
+            }
+            return true;
+        }
+
+        private static string strip_v (string version) {
+            return version.has_prefix ("v") ? version.substring (1) : version;
+        }
+    }
+}

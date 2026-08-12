@@ -23,12 +23,13 @@ meson test -C _build --print-errorlogs
 meson devenv -C _build networking-lab          # run uninstalled
 ```
 
-Three suites: `data` validates the desktop, AppStream and GSettings files; `core` runs the
-Vala unit tests in `tests/`, which link the core library without GTK; `integration` boots
-the demo lab under docker.
+Four suites: `data` validates the desktop, AppStream and GSettings files; `core` runs the
+Vala unit tests in `tests/`, which link the core library without GTK; `lab` unit-tests the
+lab layer against a stub `docker`; `integration` boots the demo lab under real docker.
 
 ```sh
 meson test -C _build --suite core
+meson test -C _build --suite lab
 meson test -C _build --suite data
 meson test -C _build validate-gschema   # or validate-desktop-file, validate-metainfo-file
 meson test -C _build --setup docker --suite integration --print-errorlogs
@@ -71,6 +72,26 @@ Meson resolves the generated `.vapi` automatically from `link_with:` inside
 `declare_dependency`, so consumers need no `--vapidir` wiring.
 
 `netlab-compile` is deliberately not installed while it is still a stub.
+
+### The lab layer is where the outside world starts
+
+`src/lab/` (`netlab_lab_dep`) holds everything `src/core/` is forbidden to do: subprocesses,
+the filesystem, docker. It links core and is still GTK-free, which is what lets
+`tests/lab.vala` drive the whole lifecycle from a plain test binary. The split is the point —
+core stays a pure function of the document, so the golden-file comparison keeps working.
+
+`Session` derives its state from what `docker compose ps` reports, never from what it
+believes it did. That is what lets it adopt a lab left running by an earlier run, and what
+keeps a container that died on boot from being drawn as running. `container_name:` in the
+generated file is what makes a device name and a container name the same string, which is
+the whole basis of `Session.is_running (device)`.
+
+`tests/lab.vala` writes a stub `docker` into a temp directory and puts it **earlier on
+PATH**; behaviour is driven by `NETLAB_STUB_*` environment variables (compose version,
+daemon reachability, which subcommand fails, canned `ps` output), and every invocation is
+appended to a log the tests assert against. `XDG_DATA_HOME` is redirected into the same
+sandbox — set in `install_stub ()` before `Test.init`, because GLib caches the data
+directory on first use. A failing run keeps the sandbox and prints its path.
 
 ### The app ID is a cross-cutting string
 
@@ -120,12 +141,15 @@ compile error.
 
 ## Expected build warnings — do not "fix"
 
-Four `-Wincompatible-pointer-types` warnings pointing at `src/ui/application.vala` are
-unavoidable. valac emits `#pragma GCC diagnostic warning "-Wincompatible-pointer-types"`
+Five `-Wincompatible-pointer-types` warnings — four pointing at `src/ui/application.vala`,
+one at `src/lab/docker.vala` (`g_subprocess_launcher_spawnv`) — are unavoidable. valac emits
+`#pragma GCC diagnostic warning "-Wincompatible-pointer-types"`
 into its generated C, which outranks any `-Wno-` flag on the command line. They are
 const-correctness artifacts of generated code, not defects in the Vala source. Every other
-generated-code warning is already suppressed in the root `meson.build`. Treat these four as
-baseline, not regressions.
+generated-code warning is already suppressed in the root `meson.build` — including
+`-Wno-unused-function`, which async methods need: valac emits a ref/unref pair per captured
+block and uses neither when the block only reads. Treat these five as baseline, not
+regressions.
 
 ## Driving the UI
 

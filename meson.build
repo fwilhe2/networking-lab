@@ -32,6 +32,9 @@ add_project_arguments([
   '-Wno-unused-parameter',
   '-Wno-unused-variable',
   '-Wno-unused-but-set-variable',
+  # valac emits a ref/unref pair for every captured block in an async method and
+  # uses neither when the block only reads.
+  '-Wno-unused-function',
   '-Wno-cast-function-type',
   '-Wno-discarded-qualifiers',
 ], language: 'c')
