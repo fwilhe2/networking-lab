@@ -109,6 +109,41 @@ flatpak-builder --user --install --force-clean _flatpak io.github.fwilhe2.Networ
 flatpak run io.github.fwilhe2.NetworkingLab
 ```
 
+### Debian package
+
+Targets Debian 13 (trixie), the current stable. The build runs inside a Debian
+container, so the host needs nothing but docker and the result does not depend
+on what happens to be installed locally.
+
+```sh
+tools/build-deb.sh                     # -> dist/networking-lab_0.1.0_amd64.deb
+DEBIAN_VERSION=sid tools/build-deb.sh  # or somewhere else
+sudo apt install ./dist/networking-lab_0.1.0_amd64.deb
+```
+
+Docker is a `Recommends`, not a `Depends`: the designer, the compiler and the
+export all work without a container runtime, and the run controls say why they
+are insensitive. Debian's `docker-compose` is the v2 Go implementation and
+installs the CLI plugin, so `docker compose` — the syntax the generated file
+needs — works.
+
+### RPM package
+
+Targets Fedora 44, the current release; same idea, in a Fedora container.
+
+```sh
+tools/build-rpm.sh                     # -> dist/networking-lab-0.1.0-1.fc44.x86_64.rpm
+FEDORA_VERSION=45 tools/build-rpm.sh
+sudo dnf install ./dist/networking-lab-0.1.0-1.fc44.x86_64.rpm
+```
+
+`%check` runs the meson suite during the build, and `debuginfo` and
+`debugsource` subpackages are produced alongside the binary one.
+
+Both packages carry the same six files: the binary, the desktop entry, the
+AppStream metainfo, the GSettings schema and the two icons. Neither ships the
+integration test or the `netlab-compile` helper, which stay development tools.
+
 ### Container
 
 `Containerfile` is a multi-stage build: the first stage compiles and runs the

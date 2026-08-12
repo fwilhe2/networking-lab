@@ -1,0 +1,5 @@
+networking-lab (0.1.0) trixie; urgency=medium
+
+  * Initial package.
+
+ -- Florian Wilhelm <fwilhelm.wgt@gmail.com>  Wed, 12 Aug 2026 19:22:27 +0200

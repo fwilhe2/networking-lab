@@ -142,3 +142,40 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Both package jobs run the same scripts a developer runs, inside the same
+  # distribution containers, so a green job means the documented command works
+  # rather than that some CI-only variant of it does.
+  deb:
+    name: Debian package (trixie)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The build runs meson test inside the container, so this job gates on
+      # the suite as well as on the packaging.
+      - name: Build
+        run: tools/build-deb.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: networking-lab-deb
+          path: dist/*.deb
+
+  rpm:
+    name: RPM package (Fedora 44)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        run: tools/build-rpm.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: networking-lab-rpm
+          # The debuginfo and debugsource subpackages come along; they are the
+          # difference between a useful backtrace and an address.
+          path: dist/*.rpm

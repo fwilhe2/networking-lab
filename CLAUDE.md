@@ -177,6 +177,35 @@ valac type-checks `[GtkTemplate]` and `[GtkChild]` only because `src/ui/meson.bu
 `--gresources=`. Without that flag a wrong child id becomes a runtime failure instead of a
 compile error.
 
+## Distribution packaging
+
+`debian/` targets Debian 13 (trixie), `networking-lab.spec` targets Fedora 44 — the current
+stable and the current release. `tools/build-deb.sh` and `tools/build-rpm.sh` build each one
+inside its own distribution container, so the host needs only docker and CI runs the same
+command a developer does.
+
+**The version number now lives in three files**: `meson.build`, `debian/changelog` and the
+spec's `Version:`. Both build scripts compare them and refuse to start on a mismatch, which
+is a better error than the one `dpkg-buildpackage` produces three minutes in. Releasing
+means editing all three.
+
+Other things worth knowing before touching either:
+
+- The Debian package is **native format** (`3.0 (native)`, version `0.1.0` with no revision).
+  That avoids needing an upstream tarball to build from a git checkout.
+- Build dependencies are resolved with `mk-build-deps` from `debian/control`, not
+  `apt-get build-dep`, because the Debian container images carry no `deb-src` entries.
+- The spec uses `pkgconfig(...)` BuildRequires so dnf resolves Fedora's package names
+  (`vte291-gtk4-devel` and friends) instead of this file guessing them.
+- `%check` runs `%meson_test`; `dh_auto_test` runs `meson test`. Both get the data, core and
+  lab suites and neither gets `integration`, which the default test setup excludes — so a
+  package build never tries to start containers.
+- `po/LINGUAS` is empty, so there are no locale files and the spec has no `%find_lang`.
+  Adding the first translation means adding it, or `rpmbuild` fails on unpackaged files.
+- Docker is a `Recommends` in both, deliberately: SPEC's designer half works without it.
+- Lintian reports `no-manual-page`. There is no man page; adding one means a new file, a
+  meson install rule and a `%files` entry.
+
 ## Version floors
 
 `meson.build` pins libadwaita >= 1.5 for `AdwDialog` / `AdwAboutDialog` /

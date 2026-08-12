@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+#
+# debhelper knows meson, so the whole build is one line. Two notes:
+#
+#   * dh's meson buildsystem configures --buildtype=plain and --prefix=/usr,
+#     which is what a distribution package wants; it does not use _build, so a
+#     developer's build tree in the source directory is left alone.
+#   * dh_auto_test runs `meson test`, which is the data, core and lab suites.
+#     The integration suite needs docker and is excluded by the default test
+#     setup in tests/meson.build, so a build never tries to start containers.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@ --buildsystem=meson

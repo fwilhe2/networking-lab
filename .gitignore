@@ -6,3 +6,6 @@ po/*.mo
 po/*.pot
 subprojects/*/
 !subprojects/*.wrap
+
+# Built packages (tools/build-deb.sh, tools/build-rpm.sh)
+dist/
