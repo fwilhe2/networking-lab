@@ -103,6 +103,11 @@ namespace NetworkingLab {
         private double drag_from_y;
         private bool dragging = false;
 
+        /* Where the button went down, in widget pixels. A press is only a drag
+           once the pointer has left the threshold around this point. */
+        private double press_x;
+        private double press_y;
+
         /* Cursor position in canvas coordinates, for the rubber band. */
         private double pointer_x;
         private double pointer_y;
@@ -141,10 +146,16 @@ namespace NetworkingLab {
             click.set_button (Gdk.BUTTON_PRIMARY);
             click.pressed.connect (on_pressed);
             click.released.connect (on_released);
+            /* A gesture that is cancelled — the pointer grab is broken, another
+               widget claims the sequence — never emits `released`, which would
+               otherwise leave a device stuck to the cursor. */
+            click.cancel.connect (() => end_drag ());
             add_controller (click);
 
             var motion = new Gtk.EventControllerMotion ();
-            motion.motion.connect (on_motion);
+            motion.motion.connect ((wx, wy) => {
+                on_motion (motion.get_current_event_state (), wx, wy);
+            });
             add_controller (motion);
 
             /* Ctrl+wheel zooms; a plain wheel is left to the scrolled window. */
@@ -192,6 +203,8 @@ namespace NetworkingLab {
                 drag_from_x = node.x;
                 drag_from_y = node.y;
                 dragging = false;
+                press_x = wx;
+                press_y = wy;
                 return;
             }
 
@@ -224,11 +237,29 @@ namespace NetworkingLab {
             document.connect_devices (from, node.id);
         }
 
-        private void on_motion (double wx, double wy) {
+        private void on_motion (Gdk.ModifierType state, double wx, double wy) {
             pointer_x = to_canvas (wx);
             pointer_y = to_canvas (wy);
 
             if (drag_id != "") {
+                /* If the button is no longer down, the release was lost — to a
+                   grab, a cancelled gesture, or a click that ended off the
+                   widget. Without this the device would follow the pointer
+                   around with nothing pressed. */
+                if ((state & Gdk.ModifierType.BUTTON1_MASK) == 0) {
+                    end_drag ();
+                    return;
+                }
+
+                /* Selecting is a click, and a click is never perfectly still.
+                   Until the pointer has travelled past the threshold this is
+                   still a click, so the position is left exactly as it was —
+                   otherwise a pixel of hand movement would snap the device to
+                   the grid and land in the undo history as a move. */
+                if (!dragging && !past_drag_threshold (wx, wy)) {
+                    return;
+                }
+
                 dragging = true;
                 move_node (topology, drag_id, pointer_x + drag_dx, pointer_y + drag_dy, free_placement);
                 queue_draw ();
@@ -237,10 +268,24 @@ namespace NetworkingLab {
             }
         }
 
+        /* Widget pixels, not document units: this is about how far a hand
+           wobbles on screen, which does not change with the zoom. */
+        private bool past_drag_threshold (double wx, double wy) {
+            var settings = Gtk.Settings.get_default ();
+            var threshold = settings == null ? 8 : ((!) settings).gtk_dnd_drag_threshold;
+
+            return (wx - press_x).abs () >= threshold
+                || (wy - press_y).abs () >= threshold;
+        }
+
         private void on_released (Gtk.GestureClick gesture, int n_press, double x, double y) {
             if (drag_id != "" && dragging) {
                 document.commit_drag (drag_id, drag_from_x, drag_from_y);
             }
+            end_drag ();
+        }
+
+        private void end_drag () {
             drag_id = "";
             dragging = false;
         }

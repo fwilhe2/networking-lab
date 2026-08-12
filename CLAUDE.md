@@ -204,6 +204,12 @@ the arrow keys — a popover's coordinates move with the window size. The file c
 is deliberately not driven: it is a separate toplevel, so a screenshot would capture
 the window behind it and then steal its focus.
 
+**`App.click()` is a cleaner click than any hand can make**: press and release at exactly
+one point, with no motion between them. A whole class of bug — anything that reacts to the
+first pixel of movement — is therefore invisible to the driver. `canvas.vala`'s drag
+threshold exists because of one of them, and reproducing it needed a synthetic press,
+2px move, release.
+
 **A focused VTE terminal swallows the keyboard**, including `F10` and the plain-key
 shortcuts. That is correct terminal behaviour, but it means `App.menu()` does nothing once a
 terminal has focus — click the canvas first. Clicking the canvas *does* move the focus
