@@ -140,9 +140,11 @@ sudo dnf install ./dist/networking-lab-0.1.0-1.fc44.x86_64.rpm
 `%check` runs the meson suite during the build, and `debuginfo` and
 `debugsource` subpackages are produced alongside the binary one.
 
-Both packages carry the same six files: the binary, the desktop entry, the
-AppStream metainfo, the GSettings schema and the two icons. Neither ships the
-integration test or the `netlab-compile` helper, which stay development tools.
+Both packages install the same six files — the binary, the desktop entry, the
+AppStream metainfo, the GSettings schema and the two icons — plus each
+distribution's own conventions around them (a copyright file and changelog on
+Debian, the licence and README on Fedora). Neither ships the integration test or
+the `netlab-compile` helper, which stay development tools.
 
 ### Container
 
@@ -191,16 +193,26 @@ For a pure X11 host, swap the Wayland socket for `-e DISPLAY -v /tmp/.X11-unix:/
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs three jobs on push, PR and manual dispatch:
+`.github/workflows/ci.yml` runs five jobs on push, PR and manual dispatch:
 
 | Job | What it does |
 | --- | --- |
 | **Build & test** | Compiles in a `debian:trixie` container and runs `meson test`; uploads `meson-logs/` on failure |
 | **Flatpak** | Builds against `org.gnome.Sdk//50` and uploads an installable `.flatpak` bundle |
 | **Container image** | Builds `Containerfile` with buildx, pushing to GHCR on non-PR events |
+| **Debian package** | Runs `tools/build-deb.sh` and uploads the `.deb` |
+| **RPM package** | Runs `tools/build-rpm.sh` and uploads the `.rpm` |
 
 The container job needs no setup. The GHCR push uses the built-in `GITHUB_TOKEN`
-via the job's `packages: write` permission, so no secrets to configure.
+via the job's `packages: write` permission, so no secrets to configure. The two
+package jobs run the same scripts a developer runs, so a green job means the
+documented command works rather than some CI-only variant of it.
+
+## Releasing
+
+`RELEASING.md` is the checklist: the five files that carry the version number,
+the checks worth running before a tag exists, and how the artifacts are built
+and published. Releases are deliberately not triggered by pushing a tag.
 
 ## Layout
 
