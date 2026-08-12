@@ -16,6 +16,7 @@ namespace NetworkingLab {
         [GtkChild] private unowned Gtk.ToggleButton palette_toggle;
         [GtkChild] private unowned Gtk.ToggleButton properties_toggle;
         [GtkChild] private unowned Gtk.ScrolledWindow canvas_scroller;
+        [GtkChild] private unowned Gtk.Paned canvas_paned;
         [GtkChild] private unowned Gtk.Button zoom_reset_button;
         [GtkChild] private unowned Gtk.ToggleButton select_mode_button;
         [GtkChild] private unowned Gtk.ToggleButton link_mode_button;
@@ -29,6 +30,7 @@ namespace NetworkingLab {
         private Canvas canvas;
         private Properties properties;
         private LabController lab;
+        private TerminalPane terminals;
 
         public Window (Gtk.Application app) {
             Object (application: app);
@@ -57,6 +59,9 @@ namespace NetworkingLab {
             canvas.lab = lab;
             lab.changed.connect (on_lab_changed);
             lab.failed.connect (show_failure);
+
+            terminals = new TerminalPane ();
+            terminals.emptied.connect (hide_terminals);
 
             properties = new Properties (document);
             palette_split.sidebar = new Palette ();
@@ -129,6 +134,7 @@ namespace NetworkingLab {
             add_simple_action ("import", () => on_import ());
             add_simple_action ("export", () => on_export ());
             add_simple_action ("run-lab", () => on_run_lab ());
+            add_simple_action ("open-terminal", () => on_open_terminal ());
         }
 
         private delegate void ActionCallback ();
@@ -316,6 +322,52 @@ namespace NetworkingLab {
                 });
             });
             dialog.present (this);
+        }
+
+        /* ── terminals (PLAN 9.3) ───────────────────────────────────── */
+
+        private void on_open_terminal () {
+            var node = document.selected_node ();
+            if (node == null) {
+                report (_("Select a device first."));
+                return;
+            }
+
+            if (!((!) node).device_type.is_service ()) {
+                report (_("A switch is a docker network, not a container — there is nothing to log into."));
+                return;
+            }
+
+            var name = ((!) node).name;
+            if (lab.mark_for (name) != DeviceMark.RUNNING) {
+                report_toast (_("%s is not running — start the lab first.").printf (name));
+                return;
+            }
+
+            show_terminals ();
+            terminals.open ((!) node);
+            report (_("Terminal on %s.").printf (name));
+        }
+
+        /* Attached on first use rather than kept empty: a Paned with a
+           zero-height end child still shows its handle. */
+        private void show_terminals () {
+            if (canvas_paned.end_child == terminals) {
+                return;
+            }
+
+            canvas_paned.end_child = terminals;
+
+            /* Two thirds to the drawing, which is what is being worked on. */
+            var height = canvas_paned.get_height ();
+            if (height > 0) {
+                canvas_paned.position = height * 2 / 3;
+            }
+        }
+
+        private void hide_terminals () {
+            canvas_paned.end_child = null;
+            canvas.grab_focus ();
         }
 
         private void on_lab_changed () {

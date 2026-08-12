@@ -468,9 +468,9 @@ namespace NetworkingLab {
         }
 
         private Gtk.Widget shell_row (Core.Node node) {
-            var command = node.device_type == DeviceType.ROUTER
-                ? "docker exec -it %s vtysh".printf (node.name)
-                : "docker exec -it %s sh".printf (node.name);
+            /* The same command the terminal runs — defined once in
+               terminal.vala so the two cannot drift apart. */
+            var command = terminal_command_line (node);
 
             var box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 6);
 

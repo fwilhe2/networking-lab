@@ -52,7 +52,7 @@ WINDOW_TITLE = "Networking Lab"
 
 # The primary menu, top to bottom. Only the order matters: menu() walks it with
 # the arrow keys, because a popover's coordinates depend on the window size.
-MENU_ITEMS = ["Import", "Export", "Load Demo", "Clear",
+MENU_ITEMS = ["Import", "Export", "Open Terminal", "Load Demo", "Clear",
               "Keyboard Shortcuts", "Preferences", "About"]
 
 # Where document (0,0) sits inside the captured window image. Measured from a

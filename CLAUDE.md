@@ -106,6 +106,33 @@ appended to a log the tests assert against. `XDG_DATA_HOME` is redirected into t
 sandbox — set in `install_stub ()` before `Test.init`, because GLib caches the data
 directory on first use. A failing run keeps the sandbox and prints its path.
 
+### VTE is an optional dependency, on purpose
+
+`src/ui/terminal.vala` is compiled either way. `src/ui/meson.build` looks for
+`vte-2.91-gtk4` with `required: false` and adds `--define=HAVE_VTE` when it is there;
+everything version-dependent is behind that one flag inside that one file, so the rest of
+`src/ui/` sees the same `DeviceTerminal` and `TerminalPane` in both builds. Without VTE the
+terminal is an `AdwStatusPage` printing the `docker exec` command to run yourself.
+
+It is optional because **the GNOME 50 runtime does not ship `vte-2.91-gtk4`** — checked, not
+assumed — and the Flatpak cannot reach the docker socket anyway, so a terminal there would
+be dead weight. Making it required would mean building VTE from source in the manifest to
+support a feature that sandbox cannot use.
+
+Note also that `vte-2.91-gtk4` pulls in `gtk4 >= 4.14` through pkg-config, above this
+project's own 4.12 floor. On an older GTK the dependency is simply not found and the build
+falls back — which is the intended outcome, not a configure error.
+
+The dependency has to be added in **four** places, and the runtime one is the one that gets
+forgotten — a missing shared library does not fail an image build, only the app at launch:
+
+| Place | Package |
+| --- | --- |
+| `.github/workflows/ci.yml` | `libvte-2.91-gtk4-dev` |
+| `Containerfile` builder stage | `libvte-2.91-gtk4-dev` |
+| `Containerfile` runtime stage | `libvte-2.91-gtk4-0` |
+| `.devcontainer/Dockerfile` | `libvte-2.91-gtk4-dev` |
+
 ### The app ID is a cross-cutting string
 
 `io.github.fwilhe2.NetworkingLab` and its slash form `/io/github/fwilhe2/NetworkingLab` are load-bearing in six
@@ -176,6 +203,14 @@ reached with `App.menu()`, which opens the primary menu with `F10` and walks it 
 the arrow keys — a popover's coordinates move with the window size. The file chooser
 is deliberately not driven: it is a separate toplevel, so a screenshot would capture
 the window behind it and then steal its focus.
+
+**A focused VTE terminal swallows the keyboard**, including `F10` and the plain-key
+shortcuts. That is correct terminal behaviour, but it means `App.menu()` does nothing once a
+terminal has focus — click the canvas first. Clicking the canvas *does* move the focus
+(`on_pressed` calls `grab_focus`), so one click is enough. Adding an item to the primary
+menu also means updating `MENU_ITEMS` in `tools/drive.py`: `menu()` walks the popover by
+index, and a popover is a separate surface that `import` does not capture, so a wrong index
+fails silently and invisibly.
 
 A screenshot of a window that is not visible — moved off-screen, occluded, on another
 workspace — is the **last frame that was drawn**, not the current state. GTK stops

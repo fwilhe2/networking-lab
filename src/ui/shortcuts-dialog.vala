@@ -42,6 +42,11 @@ namespace NetworkingLab {
             view.add (text_row (_("Zoom the canvas"), _("Ctrl and the scroll wheel")));
             page.add (view);
 
+            var lab = group (_("Lab"));
+            lab.add (accel_row (_("Open a terminal on the selected device"), "t"));
+            lab.add (text_row (_("Start or stop the lab"), _("The Run button")));
+            page.add (lab);
+
             var general = group (_("General"));
             general.add (accel_row (_("Generate the compose file"), "g"));
             general.add (accel_row (_("This list"), "question"));

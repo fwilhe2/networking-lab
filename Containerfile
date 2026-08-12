@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgtk-4-dev \
         libgtk-4-bin \
         libadwaita-1-dev \
+        libvte-2.91-gtk4-dev \
         gettext \
         desktop-file-utils \
         appstream \
@@ -59,6 +60,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgtk-4-1 \
         libadwaita-1-0 \
         libjson-glib-1.0-0 \
+        libvte-2.91-gtk4-0 \
         adwaita-icon-theme \
         fonts-dejavu-core \
         dbus \

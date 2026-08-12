@@ -63,6 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgtk-4-dev \
         libgtk-4-bin \
         libadwaita-1-dev \
+        libvte-2.91-gtk4-dev \
         gettext \
         desktop-file-utils \
         appstream \

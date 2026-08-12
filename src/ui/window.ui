@@ -106,6 +106,12 @@
         </child>
         <child>
           <object class="GtkShortcut">
+            <property name="trigger">t</property>
+            <property name="action">action(win.open-terminal)</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcut">
             <property name="trigger">question</property>
             <property name="action">action(win.shortcuts)</property>
           </object>
@@ -285,9 +291,24 @@
                     <property name="min-sidebar-width">300</property>
                     <property name="max-sidebar-width">380</property>
                     <property name="content">
-                      <object class="GtkScrolledWindow" id="canvas_scroller">
-                        <property name="hexpand">True</property>
-                        <property name="vexpand">True</property>
+                      <!--
+                        Terminals share the canvas column rather than taking a
+                        fourth one: the drawing is 2200 units wide and the
+                        window already spends 432 on two sidebars. The end child
+                        is attached from window.vala when the first session
+                        opens, so a lab that is only being drawn has no pane.
+                      -->
+                      <object class="GtkPaned" id="canvas_paned">
+                        <property name="orientation">vertical</property>
+                        <property name="resize-start-child">True</property>
+                        <property name="shrink-start-child">False</property>
+                        <property name="shrink-end-child">False</property>
+                        <property name="start-child">
+                          <object class="GtkScrolledWindow" id="canvas_scroller">
+                            <property name="hexpand">True</property>
+                            <property name="vexpand">True</property>
+                          </object>
+                        </property>
                       </object>
                     </property>
                   </object>
@@ -336,6 +357,12 @@
       <item>
         <attribute name="label" translatable="yes">_Export…</attribute>
         <attribute name="action">win.export</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">Open _Terminal</attribute>
+        <attribute name="action">win.open-terminal</attribute>
       </item>
     </section>
     <section>
