@@ -31,8 +31,8 @@ fi
 echo "Building networking-lab $meson_version for fedora:$FEDORA_VERSION"
 
 $DOCKER run --rm \
-    -v "$root:/src:ro" \
-    -v "$out:/out" \
+    -v "$root:/src:ro,z" \
+    -v "$out:/out:z" \
     -e VERSION="$meson_version" \
     "fedora:$FEDORA_VERSION" \
     bash -eux -c '
