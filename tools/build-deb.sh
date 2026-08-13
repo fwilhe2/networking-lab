@@ -35,8 +35,8 @@ fi
 echo "Building networking-lab $meson_version for debian:$DEBIAN_VERSION"
 
 $DOCKER run --rm \
-    -v "$root:/src:ro" \
-    -v "$out:/out" \
+    -v "$root:/src:ro,z" \
+    -v "$out:/out:z" \
     -e DEBIAN_FRONTEND=noninteractive \
     "debian:$DEBIAN_VERSION" \
     bash -eux -c '
