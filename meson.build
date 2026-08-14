@@ -44,8 +44,11 @@ subdir('src')
 subdir('tests')
 subdir('po')
 
+# macOS has no desktop entry database and no desktop-file-utils, so asking for
+# one is a hard configure error there rather than a no-op — and the .desktop
+# file it would index means nothing inside an .app bundle anyway.
 gnome.post_install(
      glib_compile_schemas: true,
     gtk_update_icon_cache: true,
-  update_desktop_database: true,
+  update_desktop_database: host_machine.system() != 'darwin',
 )
