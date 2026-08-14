@@ -60,6 +60,10 @@ jobs:
     # macos-26-arm64 rather than the macos-26 alias: the label is explicit
     # about the architecture, and the bundle this job uploads is arm64-only.
     runs-on: macos-26-arm64
+    # A bundling step that stops to ask a question has nobody to answer it, and
+    # the default limit for that is six hours of a runner. Half an hour is
+    # already four times the honest build.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -68,7 +72,7 @@ jobs:
       - name: Install build dependencies
         run: |
           brew install --quiet meson ninja vala gtk4 libadwaita json-glib \
-            gettext dylibbundler
+            librsvg gettext dylibbundler
           echo "$(brew --prefix gettext)/bin" >> "$GITHUB_PATH"
 
       # Builds, runs the suite, assembles and signs the bundle — the same script

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Build "Networking Lab.app" — a self-contained macOS bundle.
 #
 #   tools/build-macos-app.sh        # -> dist/NetworkingLab-macos-arm64.zip
@@ -12,7 +12,11 @@
 #
 # Build dependencies come from Homebrew:
 #
-#   brew install meson ninja vala gtk4 libadwaita json-glib gettext dylibbundler
+#   brew install meson ninja vala gtk4 libadwaita json-glib librsvg gettext \
+#       dylibbundler
+#
+# bash rather than sh: this is macOS-only anyway, and the dylibbundler step
+# below needs `pipefail` to notice a failure through a pipe.
 #
 # The bundle is ad-hoc signed at the end. That is not optional on Apple silicon:
 # every rewritten dylib invalidates its signature, and macOS refuses to run an
@@ -21,7 +25,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-set -eu
+set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 build=${BUILD_DIR:-$root/_build-macos}
@@ -153,7 +157,11 @@ sed -i '' "s/@VERSION@/$version/g" "$app/Contents/Info.plist"
 # pixbuf loader. dylibbundler copies what they need into Contents/libs and
 # rewrites the load commands to @executable_path/../libs.
 
+# -s: librsvg is a Rust build, so the SVG pixbuf loader names it
+# `@rpath/librsvg-2.2.dylib` rather than by path, and dylibbundler resolves an
+# @rpath entry only against a search path it was given.
 set -- -b -cd -of \
+    -s "$brew_prefix/lib" \
     -d "$app/Contents/libs" \
     -p "@executable_path/../libs" \
     -x "$app/Contents/MacOS/networking-lab-bin"
@@ -164,7 +172,17 @@ for loader in "$loaders"/*.so; do
     [ -e "$loader" ] || continue
     set -- "$@" -x "$loader"
 done
-dylibbundler "$@"
+# Asked for a library it cannot find, dylibbundler prompts on stdin — and with
+# nobody there to answer it re-asks forever: in CI that was a 500 MB log and a
+# job that ran until it was cancelled. Capping the output turns that into a
+# fast failure instead, because the write after `head` closes the pipe kills
+# it, and the first lines name the library that needs a search path.
+if ! dylibbundler "$@" 2>&1 | head -c 100000; then
+    echo >&2
+    echo "$0: dylibbundler failed — if the output above ends in a prompt," >&2
+    echo "a dependency could not be resolved; add its directory with -s." >&2
+    exit 1
+fi
 
 # ── signing ─────────────────────────────────────────────────────────────────
 #

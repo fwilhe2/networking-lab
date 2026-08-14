@@ -287,6 +287,14 @@ load-bearing:
 The CI job greps every load command for `/opt/homebrew` and `/usr/local/Cellar`. That check
 is the one that catches "works on the machine that built it", which no other step would.
 
+**dylibbundler asks questions.** Given a dependency it cannot resolve it prompts on stdin,
+and with nobody to answer it re-asks forever — the first CI run produced a 500 MB log and a
+job that only stopped when it was cancelled. Two guards: its output is piped through
+`head -c`, so the write after the pipe closes kills it and the run fails in seconds, and the
+job carries `timeout-minutes: 30`. The dependency that triggered it was
+`@rpath/librsvg-2.2.dylib` — librsvg is a Rust build, so the SVG pixbuf loader names it by
+rpath, and dylibbundler only resolves those against a `-s` search path.
+
 ## Version floors
 
 `meson.build` pins libadwaita >= 1.5 for `AdwDialog` / `AdwAboutDialog` /
