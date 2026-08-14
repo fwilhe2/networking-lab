@@ -57,7 +57,9 @@ jobs:
 
   macos:
     name: macOS app (Apple silicon)
-    runs-on: macos-15
+    # macos-26-arm64 rather than the macos-26 alias: the label is explicit
+    # about the architecture, and the bundle this job uploads is arm64-only.
+    runs-on: macos-26-arm64
     steps:
       - uses: actions/checkout@v7
 
