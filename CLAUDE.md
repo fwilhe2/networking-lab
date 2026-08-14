@@ -110,8 +110,9 @@ directory on first use. A failing run keeps the sandbox and prints its path.
 ### The engine is podman *or* docker
 
 `Lab.Engine` (`src/lab/engine.vala`) is the only thing in the tree that names a container
-engine. It takes the first of `Engine.CANDIDATES` — `podman`, then `docker` — found on PATH,
-or whatever `NETLAB_ENGINE` names. What is actually depended on is **compose v2**, which
+engine. It takes the first of `Engine.CANDIDATES` — `podman`, then `docker` — found by
+`Engine.find_program ()`, or whatever `NETLAB_ENGINE` names (an absolute path included,
+which `g_find_program_in_path` returns unchanged). What is actually depended on is **compose v2**, which
 `podman compose` delegates to the same binary docker uses, so every other call site says
 `compose …`, `exec …` and does not care which program runs it. `Engine.program_name ()` is
 how `terminal_command ()` prints and runs the right one.
@@ -127,6 +128,35 @@ Two things that cost a debugging session, both verified against real podman:
 
 `docker info --format {{.ServerVersion}}` is *not* portable — podman's `info` schema has no
 such field — which is why the probe formats nothing and reads only exit statuses.
+
+#### Two PATHs, both of which bite on macOS
+
+A GUI application on macOS inherits **launchd's** PATH — `/usr/bin:/bin:/usr/sbin:/sbin` —
+not the one the user's shell assembles, so nothing installed by Homebrew or the podman
+installer is on it. Two separate consequences, and fixing only the first leaves a bug that
+looks like "podman has no compose support":
+
+1. `find_program ()` searches `Engine.EXTRA_DIRS` (`/opt/homebrew/bin`, `/usr/local/bin`,
+   `/opt/podman/bin`) after PATH, so the engine is found at all.
+2. `run ()` puts the engine's own directory **first on the child's PATH**. `podman compose`
+   is not a subcommand: it looks up an external provider — the `docker-compose` binary — on
+   the PATH podman is *given*. An engine found in `/opt/homebrew/bin` and then run with
+   launchd's PATH would find no provider. `tests/lab.vala` asserts this by addressing the
+   stub absolutely with its directory off PATH; without the `setenv` the test fails.
+
+`EXTRA_DIRS` is searched on every platform. Three `stat` calls, no `#if`, and
+`/usr/local/bin` is a real place to install things on Linux too.
+
+The one thing that *is* conditional is the hint on an unreachable podman:
+`src/lab/meson.build` passes `--define=MACOS` when `host_machine.system() == 'darwin'`, and
+`hint ()` says `podman machine start` there instead of `systemctl --user start
+podman.socket`. The platform is a build-time fact; keep it to that one define.
+
+macOS needs nothing shared into the podman machine, because the generated file carries the
+FRR configuration in `configs.content` rather than mounting it — the same inline-configs
+decision that sets the 2.23.1 compose floor. Adding a bind mount for a config file would
+quietly break macOS while every Linux test stayed green. The three default images are all
+published for arm64 (checked against the registries), so Apple silicon does not emulate.
 
 ### VTE is an optional dependency, on purpose
 
@@ -235,6 +265,39 @@ Other things worth knowing before touching either:
   installed on such a machine.
 - Lintian reports `no-manual-page`. There is no man page; adding one means a new file, a
   meson install rule and a `%files` entry.
+
+## The macOS bundle
+
+`tools/build-macos-app.sh` builds `Networking Lab.app`, and the `macos` CI job runs exactly
+that script on `macos-15` — same pattern as the deb and rpm scripts. Four things in it are
+load-bearing:
+
+- **The meson prefix *is* `Contents/Resources`**, so meson's own install layout becomes the
+  bundle's and the launcher only has to point `XDG_DATA_DIRS` at it.
+- **Homebrew's GSettings schemas are copied in beside ours** and recompiled together.
+  GTK reads `org.gtk.gtk4.Settings.FileChooser` through GSettings, and a missing schema
+  aborts the process rather than warning.
+- **Every Mach-O is ad-hoc signed after dylibbundler runs.** Rewriting a load command
+  invalidates a signature, and macOS will not run an arm64 binary whose signature is broken
+  — the app would die at launch on a user's machine while the build looked perfect. The
+  *bundle* is deliberately not signed: `CFBundleExecutable` is the launcher script, and
+  codesign accepts a request to sign a bundle whose main executable is a script and then
+  produces something `codesign --verify` reports as missing. Making that possible — and
+  notarisation with it — means turning the launcher into a Mach-O and moving the
+  environment it sets into `main.vala`.
+- **The pixbuf loader cache is written on first run, not at build time.** It holds absolute
+  paths, and the bundle's path is not known until someone has downloaded it.
+
+The CI job greps every load command for `/opt/homebrew` and `/usr/local/Cellar`. That check
+is the one that catches "works on the machine that built it", which no other step would.
+
+**dylibbundler asks questions.** Given a dependency it cannot resolve it prompts on stdin,
+and with nobody to answer it re-asks forever — the first CI run produced a 500 MB log and a
+job that only stopped when it was cancelled. Two guards: its output is piped through
+`head -c`, so the write after the pipe closes kills it and the run fails in seconds, and the
+job carries `timeout-minutes: 30`. The dependency that triggered it was
+`@rpath/librsvg-2.2.dylib` — librsvg is a Rust build, so the SVG pixbuf loader names it by
+rpath, and dylibbundler only resolves those against a `-s` search path.
 
 ## Version floors
 

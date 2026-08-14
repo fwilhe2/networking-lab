@@ -22,6 +22,8 @@ private string call_log;
  * between calls without rewriting the script. */
 private const string STUB = """#!/bin/sh
 printf '%s\n' "$*" >> "$NETLAB_STUB_LOG"
+# Overwritten every call, so a test can ask what PATH the engine was handed.
+printf '%s\n' "$PATH" > "$NETLAB_STUB_LOG.path"
 
 case " $* " in
   *" compose version --short "*)
@@ -292,6 +294,76 @@ void test_probe_falls_back_to_docker () {
 
     FileUtils.rename (Path.build_filename (sandbox, "podman.hidden"),
                       Path.build_filename (stub_bin, "podman"));
+    Environment.set_variable ("PATH", path, true);
+}
+
+/* Whatever the engine was found through, it is run with its own directory on
+ * PATH. `podman compose` is a lookup of an external provider on the PATH podman
+ * is given, so an engine found outside PATH would otherwise be reported as
+ * having no compose support. */
+void test_engine_runs_with_its_own_directory_on_path () {
+    stub_reset ();
+
+    /* The engine is addressed by absolute path with its directory *not* on
+     * PATH — what an app launched from Finder sees, and the only arrangement in
+     * which this assertion can fail. */
+    var path = Environment.get_variable ("PATH");
+    var empty = Path.build_filename (sandbox, "empty");
+    DirUtils.create_with_parents (empty, 0755);
+    Environment.set_variable ("PATH", empty, true);
+    Environment.set_variable ("NETLAB_ENGINE", Path.build_filename (stub_bin, "podman"), true);
+
+    try {
+        probe_engine ();
+    } catch (Error e) {
+        Environment.set_variable ("PATH", path, true);
+        Test.fail_printf ("probe failed: %s", e.message);
+        return;
+    }
+
+    Environment.set_variable ("PATH", path, true);
+
+    string handed;
+    try {
+        FileUtils.get_contents (call_log + ".path", out handed);
+    } catch (Error e) {
+        Test.fail_printf ("the stub recorded no PATH: %s", e.message);
+        return;
+    }
+
+    if (!handed.strip ().has_prefix (stub_bin + Path.SEARCHPATH_SEPARATOR_S)) {
+        Test.fail_printf ("expected %s first on the child's PATH, got %s",
+                          stub_bin, handed.strip ());
+    }
+}
+
+/* An engine that is installed but not on PATH is still found. This is the macOS
+ * case — a GUI application there inherits launchd's minimal PATH, not the shell's,
+ * so Homebrew's bin directory is missing — exercised on any platform by pointing
+ * the search at the sandbox. */
+void test_find_program_outside_path () {
+    stub_reset ();
+
+    var elsewhere = Path.build_filename (sandbox, "opt");
+    DirUtils.create_with_parents (elsewhere, 0755);
+    var installed = Path.build_filename (elsewhere, "podman");
+    try {
+        FileUtils.set_contents (installed, STUB);
+    } catch (Error e) {
+        error ("could not write the out-of-PATH stub: %s", e.message);
+    }
+    FileUtils.chmod (installed, 0755);
+
+    var path = Environment.get_variable ("PATH");
+    var empty = Path.build_filename (sandbox, "empty");
+    DirUtils.create_with_parents (empty, 0755);
+    Environment.set_variable ("PATH", empty, true);
+
+    assert (Engine.find_program ("podman", { elsewhere }) == installed);
+    /* And the search is the only reason it was found: with nowhere to look
+     * beyond an empty PATH there is no engine. */
+    assert (Engine.find_program ("podman", {}) == null);
+
     Environment.set_variable ("PATH", path, true);
 }
 
@@ -596,6 +668,8 @@ int main (string[] args) {
     Test.add_func ("/lab/engine/probe", test_probe_reports_the_compose_version);
     Test.add_func ("/lab/engine/absent", test_probe_without_an_engine);
     Test.add_func ("/lab/engine/docker", test_probe_falls_back_to_docker);
+    Test.add_func ("/lab/engine/off-path", test_find_program_outside_path);
+    Test.add_func ("/lab/engine/child-path", test_engine_runs_with_its_own_directory_on_path);
     Test.add_func ("/lab/engine/override", test_engine_override);
     Test.add_func ("/lab/engine/no-compose", test_probe_without_the_compose_plugin);
     Test.add_func ("/lab/engine/old-compose", test_probe_with_an_old_compose_plugin);

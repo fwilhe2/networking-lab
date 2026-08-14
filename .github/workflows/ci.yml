@@ -55,6 +55,79 @@ jobs:
           path: _build/meson-logs/
           if-no-files-found: ignore
 
+  macos:
+    name: macOS app (Apple silicon)
+    # macos-15 is the current generally available image, and arm64 — which is
+    # what the bundle this job uploads is built for. macos-26-arm64 exists as a
+    # label but never picked up a runner: the job sat queued while every other
+    # job in the workflow finished.
+    runs-on: macos-15
+    # A bundling step that stops to ask a question has nobody to answer it, and
+    # the default limit for that is six hours of a runner. Half an hour is
+    # already four times the honest build.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # gettext is keg-only, so msgfmt is not linked into the prefix; the build
+      # needs it on PATH. dylibbundler is what makes the result self-contained.
+      - name: Install build dependencies
+        run: |
+          brew install --quiet meson ninja vala gtk4 libadwaita json-glib \
+            librsvg gettext dylibbundler
+          echo "$(brew --prefix gettext)/bin" >> "$GITHUB_PATH"
+
+      # Builds, runs the suite, assembles and signs the bundle — the same script
+      # a developer with Homebrew runs, so a green job means that command works.
+      - name: Build the bundle
+        run: tools/build-macos-app.sh
+
+      # The bundle must not reach outside itself. A single Homebrew path left in
+      # a load command is the difference between an app that runs on any Mac and
+      # one that runs only on the machine that built it, and nothing else in
+      # this job would notice.
+      - name: Check that nothing links back to Homebrew
+        run: |
+          app="dist/Networking Lab.app"
+          leaked=$(
+            find "$app/Contents/MacOS" "$app/Contents/libs" -type f -perm +111 \
+              -exec otool -L {} + | grep -E '/opt/homebrew|/usr/local/(Cellar|opt)' || true
+          )
+          if [ -n "$leaked" ]; then
+            echo "$leaked"
+            exit 1
+          fi
+          echo "no Homebrew paths in any load command"
+
+      # Starting the process proves every dylib resolves and the schemas are
+      # where the launcher says. --help returns before a window is needed, which
+      # is as far as a headless runner can go.
+      - name: Smoke test
+        run: |
+          "dist/Networking Lab.app/Contents/MacOS/networking-lab" --help
+          # Every Mach-O, not the bundle: the bundle's main executable is the
+          # launcher script, which cannot carry a signature. What has to be
+          # valid for macOS to run this at all on Apple silicon is each
+          # Mach-O's own.
+          find "dist/Networking Lab.app/Contents" -type f \
+            \( -name '*.dylib' -o -name '*.so' -o -name 'networking-lab-bin' \) \
+            -exec codesign --verify --strict {} +
+          echo "every Mach-O in the bundle verifies"
+
+      - name: Upload the app
+        uses: actions/upload-artifact@v7
+        with:
+          name: networking-lab-macos-arm64
+          path: dist/NetworkingLab-macos-*.zip
+
+      - name: Upload Meson logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: meson-logs-macos
+          path: _build-macos/meson-logs/
+          if-no-files-found: ignore
+
   flatpak:
     name: Flatpak (GNOME 50)
     runs-on: ubuntu-latest

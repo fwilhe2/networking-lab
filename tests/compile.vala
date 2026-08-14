@@ -214,6 +214,22 @@ void test_configs_are_always_emitted () {
     assert (!yaml.contains ("_frr:"));
 }
 
+/* Nothing in the generated file may name a path on the host machine. This is
+   what lets a lab boot under a `podman machine` on macOS, where the containers
+   run inside a Linux VM that sees none of the host's directories unless it is
+   told to: the router configuration travels inside the file, in
+   `configs.content`, which is also why the compose floor is 2.23.1. A bind
+   mount added here would work on every Linux machine and quietly break macOS. */
+void test_nothing_is_mounted_from_the_host () {
+    var yaml = compile (demo_state ()).yaml;
+
+    assert (!yaml.contains ("volumes:"));
+    assert (!yaml.contains ("bind"));
+    /* configs.content, not configs.file — the file form is the host path. */
+    assert (yaml.contains ("    content: |"));
+    assert (!yaml.contains ("    file:"));
+}
+
 void test_header_sections_are_conditional () {
     var routers_only = parse_topology ("""
         { "nodes": [ { "id": "n1", "type": "router", "name": "r1" } ], "links": [] }
@@ -268,6 +284,7 @@ int main (string[] args) {
     Test.add_func ("/core/compile/priority", test_interface_priority);
     Test.add_func ("/core/compile/network-mode-none", test_unconnected_device_gets_network_mode_none);
     Test.add_func ("/core/compile/isolated", test_isolated_toggles_internal_on_every_network);
+    Test.add_func ("/core/compile/no-host-paths", test_nothing_is_mounted_from_the_host);
     Test.add_func ("/core/compile/host-commands", test_host_commands);
     Test.add_func ("/core/compile/no-gateway", test_host_without_a_gateway_skips_the_route_steps);
     Test.add_func ("/core/compile/frr-extra", test_frr_extra_is_indented_with_tabs_expanded);
