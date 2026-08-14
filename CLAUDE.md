@@ -25,24 +25,24 @@ meson devenv -C _build networking-lab          # run uninstalled
 
 Four suites: `data` validates the desktop, AppStream and GSettings files; `core` runs the
 Vala unit tests in `tests/`, which link the core library without GTK; `lab` unit-tests the
-lab layer against a stub `docker`; `integration` boots the demo lab under real docker.
+lab layer against stub `podman` and `docker` scripts; `integration` boots the demo lab under a real engine.
 
 ```sh
 meson test -C _build --suite core
 meson test -C _build --suite lab
 meson test -C _build --suite data
 meson test -C _build validate-gschema   # or validate-desktop-file, validate-metainfo-file
-meson test -C _build --setup docker --suite integration --print-errorlogs
+meson test -C _build --setup engine --suite integration --print-errorlogs
 ```
 
 `integration` is **excluded from the default run** — `tests/meson.build` declares two test
-setups for exactly that: the default one lists it in `exclude_suites`, and `--setup docker`
-does not. A `--suite integration` without `--setup docker` therefore selects nothing, which
+setups for exactly that: the default one lists it in `exclude_suites`, and `--setup engine`
+does not. A `--suite integration` without `--setup engine` therefore selects nothing, which
 looks like a typo but is the exclusion working. The one test in it,
 `tests/lab.integration.sh`, generates the demo topology with `netlab-compile --demo`, runs
 `docker compose up`, waits for OSPF to converge and asserts end-to-end reachability plus
 isolation; it takes about 70s warm and several minutes cold, and exits 77 (meson's
-"skipped") when docker or a compose plugin ≥ 2.23.1 is missing. It can also be run
+"skipped") when no engine or no compose ≥ 2.23.1 is around. It can also be run
 directly: `tests/lab.integration.sh [path/to/netlab-compile]`. Meson runs tests from the
 build directory and passes that path relative to it, so the script must not `cd`.
 
@@ -76,17 +76,17 @@ Meson resolves the generated `.vapi` automatically from `link_with:` inside
 ### The lab layer is where the outside world starts
 
 `src/lab/` (`netlab_lab_dep`) holds everything `src/core/` is forbidden to do: subprocesses,
-the filesystem, docker. It links core and is still GTK-free, which is what lets
+the filesystem, the container engine. It links core and is still GTK-free, which is what lets
 `tests/lab.vala` drive the whole lifecycle from a plain test binary. The split is the point —
 core stays a pure function of the document, so the golden-file comparison keeps working.
 
-`Session` derives its state from what `docker compose ps` reports, never from what it
+`Session` derives its state from what `compose ps` reports, never from what it
 believes it did. That is what lets it adopt a lab left running by an earlier run, and what
 keeps a container that died on boot from being drawn as running. `container_name:` in the
 generated file is what makes a device name and a container name the same string, which is
 the whole basis of `Session.is_running (device)`.
 
-`src/ui/lab-controller.vala` is the only file in `src/ui/` that knows docker exists. It owns
+`src/ui/lab-controller.vala` is the only file in `src/ui/` that knows the engine exists. It owns
 the probe, one `Lab.Session`, and a 2-second poll that runs **only while a lab is up** — a
 lab that is down changes only when this application starts it, so an idle poll would be a
 subprocess every two seconds for no news. The window asks it two questions: "can I run?"
@@ -99,12 +99,34 @@ lab leaves it running, even though `tools/run-app.sh --demo` throws its `XDG_DAT
 away. The compose file goes with the temp directory; the containers do not. `docker compose
 -p netlab-demo down -v` cleans up.
 
-`tests/lab.vala` writes a stub `docker` into a temp directory and puts it **earlier on
-PATH**; behaviour is driven by `NETLAB_STUB_*` environment variables (compose version,
-daemon reachability, which subcommand fails, canned `ps` output), and every invocation is
+`tests/lab.vala` writes stub `podman` and `docker` scripts into a temp directory and puts
+them **earlier on PATH**; behaviour is driven by `NETLAB_STUB_*` environment variables
+(compose version, reachability, which subcommand fails, canned `ps` output), and every
+invocation is
 appended to a log the tests assert against. `XDG_DATA_HOME` is redirected into the same
 sandbox — set in `install_stub ()` before `Test.init`, because GLib caches the data
 directory on first use. A failing run keeps the sandbox and prints its path.
+
+### The engine is podman *or* docker
+
+`Lab.Engine` (`src/lab/engine.vala`) is the only thing in the tree that names a container
+engine. It takes the first of `Engine.CANDIDATES` — `podman`, then `docker` — found on PATH,
+or whatever `NETLAB_ENGINE` names. What is actually depended on is **compose v2**, which
+`podman compose` delegates to the same binary docker uses, so every other call site says
+`compose …`, `exec …` and does not care which program runs it. `Engine.program_name ()` is
+how `terminal_command ()` prints and runs the right one.
+
+Two things that cost a debugging session, both verified against real podman:
+
+- The probe checks reachability with **`compose ls`, not `info`**. `podman info` answers
+  happily while `/run/user/1000/podman/podman.sock` — the socket `podman compose` delegates
+  through — is not running, so an `info` probe reports READY and then Run fails with a
+  message about a docker API. `compose ls` fails exactly when compose would.
+- Rootless podman needs `systemctl --user start podman.socket`. The UNAVAILABLE message
+  says so when the engine is podman; that hint is the whole fix.
+
+`docker info --format {{.ServerVersion}}` is *not* portable — podman's `info` schema has no
+such field — which is why the probe formats nothing and reads only exit statuses.
 
 ### VTE is an optional dependency, on purpose
 
@@ -112,9 +134,9 @@ directory on first use. A failing run keeps the sandbox and prints its path.
 `vte-2.91-gtk4` with `required: false` and adds `--define=HAVE_VTE` when it is there;
 everything version-dependent is behind that one flag inside that one file, so the rest of
 `src/ui/` sees the same `DeviceTerminal` and `TerminalPane` in both builds. Without VTE the
-terminal is an `AdwStatusPage` printing the `docker exec` command to run yourself.
+terminal is an `AdwStatusPage` printing the `exec` command to run yourself.
 
-Streamed logs are the same widget with a different command (`docker compose logs -f`), which
+Streamed logs are the same widget with a different command (`compose logs -f`), which
 is where their colour, scrollback and working Ctrl+C come from; there is no second log
 viewer to maintain. Tabs are keyed separately from their titles — `logs:r1` is titled
 "r1 logs" — so `TerminalPane.forget ()` looks a page up by identity, not by title.
@@ -203,7 +225,7 @@ Other things worth knowing before touching either:
 - `po/LINGUAS` is empty, so there are no locale files and the spec has no `%find_lang`.
   Adding the first translation means adding it, or `rpmbuild` fails on unpackaged files.
 - Docker is a `Recommends` in both, deliberately: SPEC's designer half works without it.
-  **Both recommendations name alternatives**, not a single package — `docker.io | docker-ce`
+  **Both recommendations name alternatives**, not a single package — `podman | docker.io | docker-ce`
   and `docker-compose | docker-compose-plugin` on Debian, rich `(a or b)` dependencies on
   Fedora. This is not tidiness. Recommending only the distribution's own packages makes apt
   install `docker.io` on a machine running Docker CE from download.docker.com; `docker.io`
@@ -224,7 +246,7 @@ Other things worth knowing before touching either:
 ## Expected build warnings — do not "fix"
 
 Five `-Wincompatible-pointer-types` warnings — four pointing at `src/ui/application.vala`,
-one at `src/lab/docker.vala` (`g_subprocess_launcher_spawnv`) — are unavoidable. valac emits
+one at `src/lab/engine.vala` (`g_subprocess_launcher_spawnv`) — are unavoidable. valac emits
 `#pragma GCC diagnostic warning "-Wincompatible-pointer-types"`
 into its generated C, which outranks any `-Wno-` flag on the command line. They are
 const-correctness artifacts of generated code, not defects in the Vala source. Every other

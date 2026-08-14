@@ -2,11 +2,11 @@
  *
  * A terminal onto a device's container, and the tabbed pane that holds them
  * (PLAN 9.3). The command is the one the properties panel already shows —
- * `docker exec -it <name> vtysh` for a router, `… sh` for a host — which is the
- * point of the feature: nothing new to learn, just somewhere to run it.
+ * `<engine> exec -it <name> vtysh` for a router, `… sh` for a host — which is
+ * the point of the feature: nothing new to learn, just somewhere to run it.
  *
  * VTE is an **optional** build dependency. The GNOME 50 runtime does not carry
- * vte-2.91-gtk4, and the Flatpak has no route to the docker socket anyway
+ * vte-2.91-gtk4, and the Flatpak has no route to the engine socket anyway
  * (PLAN 9.5), so a build without it is a designer that says so rather than a
  * build failure. Everything version-dependent is behind HAVE_VTE in this one
  * file; the rest of src/ui/ sees the same two classes either way.
@@ -19,11 +19,13 @@ using NetworkingLab.Core;
 namespace NetworkingLab {
 
     /* Defined once here and used by the properties panel too, so the command a
-     * user is told to run and the one the terminal runs cannot drift apart. */
+     * user is told to run and the one the terminal runs cannot drift apart.
+     * `exec -it` is the same under podman, so only the program name varies. */
     public string[] terminal_command (Core.Node node) {
+        var engine = Lab.Engine.program_name ();
         return node.device_type == DeviceType.ROUTER
-            ? new string[] { "docker", "exec", "-it", node.name, "vtysh" }
-            : new string[] { "docker", "exec", "-it", node.name, "sh" };
+            ? new string[] { engine, "exec", "-it", node.name, "vtysh" }
+            : new string[] { engine, "exec", "-it", node.name, "sh" };
     }
 
     public string terminal_command_line (Core.Node node) {

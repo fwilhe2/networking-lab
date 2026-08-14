@@ -1,10 +1,10 @@
 /* lab.vala
  *
- * The lab layer of PLAN 9.1, driven against a stub `docker` placed earlier on
- * PATH: it records every argument list it is given and replays canned `ps`
- * output, so the whole lifecycle — probe, up, poll, partial start, down, and
- * docker being absent entirely — is exercised without a container daemon and
- * therefore runs in CI. The one test that does need docker is
+ * The lab layer of PLAN 9.1, driven against stub `podman` and `docker` scripts
+ * placed earlier on PATH: they record every argument list they are given and
+ * replay canned `ps` output, so the whole lifecycle — probe, up, poll, partial
+ * start, down, and no engine at all — is exercised without a container engine
+ * and therefore runs in CI. The one test that does need one is
  * tests/lab.integration.sh, which is not in this suite.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -15,7 +15,7 @@ using NetworkingLab.Lab;
 /* ── the stub ───────────────────────────────────────────────────────── */
 
 private string sandbox;         /* everything this test writes lives here */
-private string stub_bin;        /* the directory that shadows the real docker */
+private string stub_bin;        /* the directory that shadows the real engines */
 private string call_log;
 
 /* Behaviour is driven entirely by the environment so a test can change it
@@ -31,9 +31,9 @@ case " $* " in
     fi
     echo "$NETLAB_STUB_COMPOSE_VERSION"
     exit 0 ;;
-  *" info "*)
+  *" compose ls "*)
     if [ -z "${NETLAB_STUB_DAEMON:-}" ]; then
-      echo "Cannot connect to the Docker daemon." >&2
+      echo "Cannot connect to the daemon." >&2
       exit 1
     fi
     echo "$NETLAB_STUB_DAEMON"
@@ -70,13 +70,17 @@ private void install_stub () {
     call_log = Path.build_filename (sandbox, "calls.log");
     DirUtils.create_with_parents (stub_bin, 0755);
 
-    var docker = Path.build_filename (stub_bin, "docker");
-    try {
-        FileUtils.set_contents (docker, STUB);
-    } catch (Error e) {
-        error ("could not write the stub: %s", e.message);
+    /* Both names, so the podman fallback and the NETLAB_ENGINE override can
+     * be exercised without a second script. */
+    foreach (var engine in Engine.CANDIDATES) {
+        var path = Path.build_filename (stub_bin, engine);
+        try {
+            FileUtils.set_contents (path, STUB);
+        } catch (Error e) {
+            error ("could not write the stub: %s", e.message);
+        }
+        FileUtils.chmod (path, 0755);
     }
-    FileUtils.chmod (docker, 0755);
 
     /* The stub itself needs sh and cat, so the real PATH stays behind ours. */
     Environment.set_variable ("PATH", stub_bin + ":" + Environment.get_variable ("PATH"), true);
@@ -89,13 +93,14 @@ private void install_stub () {
     stub_reset ();
 }
 
-/* The default: a working docker with a new enough compose plugin, a reachable
- * daemon and nothing running. */
+/* The default: a working engine with a new enough compose, reachable, and
+ * nothing running. */
 private void stub_reset () {
     Environment.set_variable ("NETLAB_STUB_COMPOSE_VERSION", "2.29.7", true);
     Environment.set_variable ("NETLAB_STUB_DAEMON", "27.1.1", true);
     Environment.unset_variable ("NETLAB_STUB_FAIL");
     Environment.unset_variable ("NETLAB_STUB_PS");
+    Environment.unset_variable ("NETLAB_ENGINE");
     FileUtils.remove (call_log);
 }
 
@@ -114,7 +119,7 @@ private string calls () {
     try {
         FileUtils.get_contents (call_log, out text);
     } catch (Error e) {
-        /* No log yet means docker was never called, which is an answer. */
+        /* No log yet means the engine was never called, which is an answer. */
         return "";
     }
     return text;
@@ -123,7 +128,7 @@ private string calls () {
 private void assert_called (string fragment) {
     var log = calls ();
     if (!(fragment in log)) {
-        Test.fail_printf ("docker was never called with \"%s\"; calls were:\n%s", fragment, log);
+        Test.fail_printf ("the engine was never called with \"%s\"; calls were:\n%s", fragment, log);
     }
 }
 
@@ -151,13 +156,13 @@ private class Pending : Object {
     }
 }
 
-private Docker probe_docker () throws Error {
-    Docker? docker = null;
+private Engine probe_engine () throws Error {
+    Engine? engine = null;
     var pending = new Pending ();
 
-    Docker.probe.begin (null, (object, result) => {
+    Engine.probe.begin (null, (object, result) => {
         try {
-            docker = Docker.probe.end (result);
+            engine = Engine.probe.end (result);
             pending.finish (null);
         } catch (Error e) {
             pending.finish (e);
@@ -165,14 +170,14 @@ private Docker probe_docker () throws Error {
     });
 
     pending.wait ();
-    return (!) docker;
+    return (!) engine;
 }
 
 private Session session_for (string project) {
     try {
-        return new Session (probe_docker (), project);
+        return new Session (probe_engine (), project);
     } catch (Error e) {
-        error ("the stub docker did not probe: %s", e.message);
+        error ("the stub engine did not probe: %s", e.message);
     }
 }
 
@@ -224,24 +229,27 @@ private const string PS_ALL_RUNNING = """
  {"Name":"srv1","Service":"srv1","State":"running","Health":"","ExitCode":0}]
 """;
 
-/* ── docker discovery ───────────────────────────────────────────────── */
+/* ── engine discovery ───────────────────────────────────────────────── */
 
 void test_probe_reports_the_compose_version () {
     stub_reset ();
 
     try {
-        var docker = probe_docker ();
-        assert (docker.compose_version == "2.29.7");
-        assert (docker.program.has_prefix (stub_bin));
+        var engine = probe_engine ();
+        assert (engine.compose_version == "2.29.7");
+        assert (engine.program.has_suffix ("/podman"));
+        assert (engine.program.has_prefix (stub_bin));
     } catch (Error e) {
         Test.fail_printf ("probe failed: %s", e.message);
     }
 
-    /* The daemon is checked too: a client that cannot reach it is no use. */
-    assert_called ("info --format {{.ServerVersion}}");
+    /* The engine is checked too: a client that cannot reach it is no use, and
+     * it is checked through compose, which is the path every other call
+     * takes — `podman info` answers even when that path is broken. */
+    assert_called ("compose ls");
 }
 
-void test_probe_without_docker () {
+void test_probe_without_an_engine () {
     stub_reset ();
 
     var path = Environment.get_variable ("PATH");
@@ -250,8 +258,8 @@ void test_probe_without_docker () {
     Environment.set_variable ("PATH", empty, true);
 
     try {
-        probe_docker ();
-        Test.fail_printf ("expected NOT_INSTALLED with no docker on PATH");
+        probe_engine ();
+        Test.fail_printf ("expected NOT_INSTALLED with no engine on PATH");
     } catch (LabError.NOT_INSTALLED e) {
         /* The one outcome the application must survive gracefully. */
     } catch (Error e) {
@@ -261,12 +269,53 @@ void test_probe_without_docker () {
     Environment.set_variable ("PATH", path, true);
 }
 
+/* docker is the fallback, not a second-class case: with no podman on PATH the
+ * probe must find it rather than report NOT_INSTALLED. */
+void test_probe_falls_back_to_docker () {
+    stub_reset ();
+
+    /* PATH is narrowed to the stub directory for this one test: a real podman
+     * elsewhere on the developer's PATH would otherwise be found instead of the
+     * absence this is about. The stub needs no PATH of its own — its shebang is
+     * absolute and printf is a builtin. */
+    var path = Environment.get_variable ("PATH");
+    Environment.set_variable ("PATH", stub_bin, true);
+    FileUtils.rename (Path.build_filename (stub_bin, "podman"),
+                      Path.build_filename (sandbox, "podman.hidden"));
+
+    try {
+        var engine = probe_engine ();
+        assert (engine.program.has_suffix ("/docker"));
+    } catch (Error e) {
+        Test.fail_printf ("probe did not fall back to docker: %s", e.message);
+    }
+
+    FileUtils.rename (Path.build_filename (sandbox, "podman.hidden"),
+                      Path.build_filename (stub_bin, "podman"));
+    Environment.set_variable ("PATH", path, true);
+}
+
+/* And NETLAB_ENGINE wins outright, which is the escape hatch on a machine that
+ * has both installed. */
+void test_engine_override () {
+    stub_reset ();
+    Environment.set_variable ("NETLAB_ENGINE", "docker", true);
+
+    try {
+        assert (probe_engine ().program.has_suffix ("/docker"));
+    } catch (Error e) {
+        Test.fail_printf ("NETLAB_ENGINE was not honoured: %s", e.message);
+    }
+
+    assert (Engine.program_name () == "docker");
+}
+
 void test_probe_without_the_compose_plugin () {
     stub_reset ();
     Environment.unset_variable ("NETLAB_STUB_COMPOSE_VERSION");
 
     try {
-        probe_docker ();
+        probe_engine ();
         Test.fail_printf ("expected NO_COMPOSE");
     } catch (LabError.NO_COMPOSE e) {
     } catch (Error e) {
@@ -279,7 +328,7 @@ void test_probe_with_an_old_compose_plugin () {
     Environment.set_variable ("NETLAB_STUB_COMPOSE_VERSION", "2.20.3", true);
 
     try {
-        probe_docker ();
+        probe_engine ();
         Test.fail_printf ("expected COMPOSE_TOO_OLD");
     } catch (LabError.COMPOSE_TOO_OLD e) {
         assert ("2.23.1" in e.message);
@@ -293,7 +342,7 @@ void test_probe_without_a_daemon () {
     Environment.unset_variable ("NETLAB_STUB_DAEMON");
 
     try {
-        probe_docker ();
+        probe_engine ();
         Test.fail_printf ("expected UNAVAILABLE");
     } catch (LabError.UNAVAILABLE e) {
     } catch (Error e) {
@@ -302,19 +351,19 @@ void test_probe_without_a_daemon () {
 }
 
 void test_version_comparison () {
-    assert (Docker.version_at_least ("2.23.1", "2.23.1"));
-    assert (Docker.version_at_least ("2.29.7", "2.23.1"));
-    assert (Docker.version_at_least ("5.4.0", "2.23.1"));
-    assert (Docker.version_at_least ("v2.24.0", "2.23.1"));
-    assert (Docker.version_at_least ("2.29.7-desktop.1", "2.23.1"));
+    assert (Engine.version_at_least ("2.23.1", "2.23.1"));
+    assert (Engine.version_at_least ("2.29.7", "2.23.1"));
+    assert (Engine.version_at_least ("5.4.0", "2.23.1"));
+    assert (Engine.version_at_least ("v2.24.0", "2.23.1"));
+    assert (Engine.version_at_least ("2.29.7-desktop.1", "2.23.1"));
 
-    assert (!Docker.version_at_least ("2.23.0", "2.23.1"));
-    assert (!Docker.version_at_least ("2.6.0", "2.23.1"));
-    assert (!Docker.version_at_least ("1.29.2", "2.23.1"));
+    assert (!Engine.version_at_least ("2.23.0", "2.23.1"));
+    assert (!Engine.version_at_least ("2.6.0", "2.23.1"));
+    assert (!Engine.version_at_least ("1.29.2", "2.23.1"));
 
     /* Component-wise, not lexicographic: "10" sorts before "9" as text. */
-    assert (Docker.version_at_least ("10.0.0", "9.9.9"));
-    assert (!Docker.version_at_least ("9.9.9", "10.0.0"));
+    assert (Engine.version_at_least ("10.0.0", "9.9.9"));
+    assert (!Engine.version_at_least ("9.9.9", "10.0.0"));
 }
 
 /* ── where a lab lives ──────────────────────────────────────────────── */
@@ -517,7 +566,7 @@ void test_session_adopts_a_lab_it_did_not_start () {
     assert (session.running_count () == 4);
 }
 
-void test_refresh_without_a_compose_file_asks_docker_nothing () {
+void test_refresh_without_a_compose_file_asks_the_engine_nothing () {
     stub_reset ();
     stub_ps (PS_ALL_RUNNING);
 
@@ -533,7 +582,7 @@ void test_refresh_without_a_compose_file_asks_docker_nothing () {
     assert (session.state == LabState.DOWN);
     assert (session.container_count () == 0);
 
-    /* `docker compose -f` on a file that is not there is an error, not an
+    /* `compose -f` on a file that is not there is an error, not an
      * empty answer, so the poll must not make the call at all. */
     if ("ps" in calls ()) {
         Test.fail_printf ("ps was called for a lab with no compose file:\n%s", calls ());
@@ -544,12 +593,14 @@ int main (string[] args) {
     install_stub ();
     Test.init (ref args);
 
-    Test.add_func ("/lab/docker/probe", test_probe_reports_the_compose_version);
-    Test.add_func ("/lab/docker/absent", test_probe_without_docker);
-    Test.add_func ("/lab/docker/no-compose", test_probe_without_the_compose_plugin);
-    Test.add_func ("/lab/docker/old-compose", test_probe_with_an_old_compose_plugin);
-    Test.add_func ("/lab/docker/no-daemon", test_probe_without_a_daemon);
-    Test.add_func ("/lab/docker/versions", test_version_comparison);
+    Test.add_func ("/lab/engine/probe", test_probe_reports_the_compose_version);
+    Test.add_func ("/lab/engine/absent", test_probe_without_an_engine);
+    Test.add_func ("/lab/engine/docker", test_probe_falls_back_to_docker);
+    Test.add_func ("/lab/engine/override", test_engine_override);
+    Test.add_func ("/lab/engine/no-compose", test_probe_without_the_compose_plugin);
+    Test.add_func ("/lab/engine/old-compose", test_probe_with_an_old_compose_plugin);
+    Test.add_func ("/lab/engine/no-daemon", test_probe_without_a_daemon);
+    Test.add_func ("/lab/engine/versions", test_version_comparison);
 
     Test.add_func ("/lab/paths/data-dir", test_paths_are_under_the_data_directory);
     Test.add_func ("/lab/paths/write", test_write_compose_creates_the_directory);
@@ -562,7 +613,7 @@ int main (string[] args) {
     Test.add_func ("/lab/session/partial", test_session_reports_a_partial_start);
     Test.add_func ("/lab/session/failed-up", test_session_reports_a_failed_up);
     Test.add_func ("/lab/session/adopt", test_session_adopts_a_lab_it_did_not_start);
-    Test.add_func ("/lab/session/no-file", test_refresh_without_a_compose_file_asks_docker_nothing);
+    Test.add_func ("/lab/session/no-file", test_refresh_without_a_compose_file_asks_the_engine_nothing);
 
     var status = Test.run ();
 

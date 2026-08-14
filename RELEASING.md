@@ -41,7 +41,7 @@ A tag is cheap to make and annoying to move, so run the checks first.
 meson setup _build --wipe                              # from scratch, not an incremental tree
 meson compile -C _build
 meson test -C _build --print-errorlogs                 # data, core and lab suites
-meson test -C _build --setup docker --suite integration --print-errorlogs
+meson test -C _build --setup engine --suite integration --print-errorlogs
 ```
 
 The last one boots the demo topology under real docker and asserts that OSPF converges and

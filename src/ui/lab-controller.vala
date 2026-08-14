@@ -1,13 +1,14 @@
 /* lab-controller.vala
  *
- * The UI's view of a running lab: the docker probe, one Lab.Session, and the
+ * The UI's view of a running lab: the engine probe, one Lab.Session, and the
  * poll that keeps the canvas honest about what is actually up.
  *
- * This is the only place in src/ui/ that knows docker exists. Everything below
- * it is in src/lab/ and GTK-free; everything above it asks two questions —
- * "can I run?" and "is this device up?" — and gets a widget-shaped answer.
+ * This is the only place in src/ui/ that knows a container engine exists.
+ * Everything below it is in src/lab/ and GTK-free; everything above it asks two
+ * questions — "can I run?" and "is this device up?" — and gets a widget-shaped
+ * answer.
  *
- * Docker is a run-time dependency. Its absence is an ordinary outcome that
+ * The engine is a run-time dependency. Its absence is an ordinary outcome that
  * leaves the designer fully usable and the run control insensitive with a
  * reason attached, never a failure at startup (PLAN 9.2, 9.5).
  *
@@ -32,7 +33,7 @@ namespace NetworkingLab {
             UNAVAILABLE,
         }
 
-        /* Long enough not to spawn a `docker compose ps` storm, short enough
+        /* Long enough not to spawn a `compose ps` storm, short enough
          * that a container coming up appears on the canvas while the user is
          * still looking at it. */
         private const uint POLL_SECONDS = 2;
@@ -48,7 +49,7 @@ namespace NetworkingLab {
          * a failed `up` is the difference between "it broke" and a fix. */
         public signal void failed (string title, string detail);
 
-        private Lab.Docker? docker = null;
+        private Lab.Engine? engine = null;
         private Lab.Session? session = null;
         private uint poll_source = 0;
         private bool polling = false;
@@ -72,19 +73,19 @@ namespace NetworkingLab {
         /* ── availability ───────────────────────────────────────────── */
 
         private async void probe () {
-            /* A hole from the sandbox to the docker socket is a hole to root on
+            /* A hole from the sandbox to the engine socket is a hole to root on
              * the host, so the Flatpak deliberately does not have one. Saying so
              * is better than a run control that fails on every press (PLAN 9.5). */
             if (FileUtils.test ("/.flatpak-info", FileTest.EXISTS)) {
                 availability = Availability.UNAVAILABLE;
                 unavailable_reason =
-                    _("The Flatpak sandbox cannot reach the docker socket. Generate the compose file and run it yourself.");
+                    _("The Flatpak sandbox cannot reach the container engine. Generate the compose file and run it yourself.");
                 changed ();
                 return;
             }
 
             try {
-                docker = yield Lab.Docker.probe ();
+                engine = yield Lab.Engine.probe ();
             } catch (Error e) {
                 availability = Availability.UNAVAILABLE;
                 unavailable_reason = e.message;
@@ -151,17 +152,17 @@ namespace NetworkingLab {
             return status.running ? DeviceMark.RUNNING : DeviceMark.STOPPED;
         }
 
-        /* `docker compose logs -f`, addressed the same way every other call is:
+        /* `compose logs -f`, addressed the same way every other call is:
          * by project name and generated file. Run in a terminal rather than
          * piped into a text view, which is what gives it colour, scrollback and
          * a working Ctrl+C for nothing (PLAN 9.4). */
         public string[]? logs_command (string device_name) {
-            if (docker == null || session == null) {
+            if (engine == null || session == null) {
                 return null;
             }
 
             return {
-                ((!) docker).program, "compose",
+                ((!) engine).program, "compose",
                 "-p", ((!) session).project,
                 "-f", ((!) session).compose_file,
                 "logs", "-f", "--tail", "200", device_name,
@@ -171,7 +172,7 @@ namespace NetworkingLab {
         public string summary () {
             switch (availability) {
                 case Availability.CHECKING:
-                    return _("Checking for docker…");
+                    return _("Checking for a container engine…");
                 case Availability.UNAVAILABLE:
                     return _("Lab unavailable");
                 default:
@@ -245,14 +246,14 @@ namespace NetworkingLab {
          * document and can be edited. Rebinding while a lab is up would strand
          * the containers it started, so a rename takes effect once it is down. */
         private Lab.Session? require_session () {
-            if (docker == null) {
+            if (engine == null) {
                 return null;
             }
 
             var wanted = Lab.project_name_for (document.state.project_name);
             if (session == null
                 || (session.project != wanted && session.state == Lab.LabState.DOWN)) {
-                session = new Lab.Session ((!) docker, wanted);
+                session = new Lab.Session ((!) engine, wanted);
                 session.changed.connect (() => changed ());
             }
 
