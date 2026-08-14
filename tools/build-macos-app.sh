@@ -186,13 +186,22 @@ fi
 
 # ── signing ─────────────────────────────────────────────────────────────────
 #
-# Inside out: a bundle's signature covers its libraries, so they have to be
-# signed first. Ad-hoc (`-`), which is what makes an arm64 binary runnable at
-# all after its load commands were rewritten.
+# Every Mach-O, ad-hoc (`-`). This is not cosmetic: rewriting a load command
+# invalidates a signature, and macOS refuses to run an arm64 binary whose
+# signature is broken — the app would die at launch on a user's machine while
+# the build looked perfect.
+#
+# The bundle itself is deliberately *not* signed. CFBundleExecutable is the
+# launcher script, and codesign cannot put a signature in a shell script: it
+# accepts the request and then `codesign --verify` fails on the result. A
+# bundle signature buys nothing without notarisation, which needs a Developer
+# ID this project does not have.
+#
+# ponytail: no bundle signature, no notarisation. Both need the launcher to
+# become a Mach-O — the environment it sets would move into main.vala.
 find "$app/Contents/libs" -type f \( -name '*.dylib' -o -name '*.so' \) \
     -exec codesign --force --sign - {} +
 codesign --force --sign - "$app/Contents/MacOS/networking-lab-bin"
-codesign --force --sign - "$app"
 
 # ── the zip ─────────────────────────────────────────────────────────────────
 #

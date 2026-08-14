@@ -277,10 +277,14 @@ load-bearing:
 - **Homebrew's GSettings schemas are copied in beside ours** and recompiled together.
   GTK reads `org.gtk.gtk4.Settings.FileChooser` through GSettings, and a missing schema
   aborts the process rather than warning.
-- **The bundle is ad-hoc signed after dylibbundler runs, innermost first.** Rewriting a
-  load command invalidates a signature, and macOS will not run an arm64 binary whose
-  signature is broken — the app would die at launch on a user's machine while the build
-  looked perfect.
+- **Every Mach-O is ad-hoc signed after dylibbundler runs.** Rewriting a load command
+  invalidates a signature, and macOS will not run an arm64 binary whose signature is broken
+  — the app would die at launch on a user's machine while the build looked perfect. The
+  *bundle* is deliberately not signed: `CFBundleExecutable` is the launcher script, and
+  codesign accepts a request to sign a bundle whose main executable is a script and then
+  produces something `codesign --verify` reports as missing. Making that possible — and
+  notarisation with it — means turning the launcher into a Mach-O and moving the
+  environment it sets into `main.vala`.
 - **The pixbuf loader cache is written on first run, not at build time.** It holds absolute
   paths, and the bundle's path is not known until someone has downloaded it.
 
