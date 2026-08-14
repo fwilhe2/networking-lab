@@ -41,7 +41,7 @@ namespace NetworkingLab.Lab {
     }
 
     public class Session : Object {
-        public Docker docker { get; construct; }
+        public Engine engine { get; construct; }
         public string project { get; construct; }
 
         public LabState state { get; private set; default = LabState.DOWN; }
@@ -53,14 +53,14 @@ namespace NetworkingLab.Lab {
         private Compose compose;
         private HashTable<string, ContainerStatus> statuses;
 
-        public Session (Docker docker, string project_name) {
-            Object (docker: docker, project: project_name_for (project_name));
+        public Session (Engine engine, string project_name) {
+            Object (engine: engine, project: project_name_for (project_name));
         }
 
         construct {
             statuses = new HashTable<string, ContainerStatus> (str_hash, str_equal);
             compose_file = compose_path (project);
-            compose = new Compose (docker, project, compose_file);
+            compose = new Compose (engine, project, compose_file);
         }
 
         /* Writes the generated file and boots it. The yaml is passed in rather
@@ -165,8 +165,8 @@ namespace NetworkingLab.Lab {
         }
 
         private async void refresh_statuses (Cancellable? cancellable) throws Error {
-            /* No file means the lab has never been generated, and `docker
-             * compose -f` on a missing file is an error rather than an empty
+            /* No file means the lab has never been generated, and `compose -f`
+             * on a missing file is an error rather than an empty
              * answer. */
             if (!FileUtils.test (compose_file, FileTest.EXISTS)) {
                 statuses.remove_all ();

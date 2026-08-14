@@ -134,7 +134,7 @@ namespace NetworkingLab {
 
             content.append (hint (
                 _("Select a device or link to edit it.\n\n" +
-                  "A switch becomes a docker bridge network — one L2 segment and one subnet. " +
+                  "A switch becomes a bridge network — one L2 segment and one subnet. " +
                   "A direct link between two devices becomes a point-to-point network.\n\n" +
                   "Routers run FRR, so vtysh gives a classic IOS-style CLI.")));
         }

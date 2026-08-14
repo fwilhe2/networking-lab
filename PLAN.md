@@ -51,7 +51,7 @@ src/core/
 
 src/lab/                 phase 9 — the outside world, still GTK-free
   paths.vala             where a lab's compose file lives
-  docker.vala            locating docker, running a subcommand
+  engine.vala            locating podman or docker, running a subcommand
   compose.vala           up / down / ps / logs
   session.vala           lifecycle and per-device status
 
@@ -197,7 +197,7 @@ New GTK-free static library `src/lab/`:
 
 ```
 src/lab/paths.vala      where a lab's compose file and state live
-src/lab/docker.vala     locating docker, running a subcommand, capturing output
+src/lab/engine.vala     locating podman or docker, running a subcommand, capturing output
 src/lab/compose.vala    up / down / ps / logs, and parsing `ps --format json`
 src/lab/session.vala    lifecycle: DOWN → STARTING → UP → STOPPING, plus per-device status
 ```

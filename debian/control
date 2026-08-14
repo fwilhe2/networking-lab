@@ -30,24 +30,29 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  adwaita-icon-theme,
-# Docker is a run-time dependency the application locates for itself and does
-# without: the designer, the compiler and the export all work with no container
-# runtime installed, and the run controls say why they are insensitive. That is
-# a Recommends, not a Depends.
+# The container engine is a run-time dependency the application locates for
+# itself and does without: the designer, the compiler and the export all work
+# with none installed, and the run controls say why they are insensitive. That
+# is a Recommends, not a Depends.
 #
-# Each is an alternative, and the second half of each pair is what
-# download.docker.com ships. Without them, installing this package on a machine
-# running Docker CE makes apt pull Debian's docker.io — which declares
+# podman is named first, matching the order the application probes in, so a
+# machine with nothing installed gets the rootless engine. The docker
+# alternatives keep a machine that already runs docker from being made to
+# install a second stack.
+#
+# Each line is a list of alternatives, and `docker-ce` / `docker-compose-plugin`
+# are what download.docker.com ships. Without them, installing this package on a
+# machine running Docker CE makes apt pull Debian's docker.io — which declares
 # `Conflicts: docker-ce` and drags in docker-buildx, whose CLI plugin collides
 # file-for-file with docker-buildx-plugin. An alternative is satisfied by
-# whichever half is already installed, so a Docker CE machine is left alone and
-# a machine with no engine at all still gets Debian's.
+# whichever of them is already installed, so a Docker CE machine is left alone
+# and a machine with no engine at all gets podman.
 #
 # Debian's docker-compose is the v2 Go implementation and installs the CLI
 # plugin, so `docker compose` works — which is the syntax the generated file
 # needs (>= 2.23.1, for inline configs).
 Recommends:
- docker.io | docker-ce,
+ podman | docker.io | docker-ce,
  docker-compose (>= 2.23.1) | docker-compose-plugin (>= 2.23.1),
 Description: design and run container network labs
  Networking Lab draws a network of routers, switches, PCs and servers, compiles

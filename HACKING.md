@@ -23,19 +23,19 @@ Four test suites:
 | --- | --- |
 | `data` | Validates the desktop entry, the AppStream metainfo and the GSettings schema |
 | `core` | Unit tests for the model, addressing, validation and the compiler — no GTK |
-| `lab` | The docker layer, driven against a stub `docker` the test writes itself |
-| `integration` | Boots the demo under real docker and asserts that OSPF converges |
+| `lab` | The engine layer, driven against stub `podman`/`docker` the test writes itself |
+| `integration` | Boots the demo under a real engine and asserts that OSPF converges |
 
-The first three run by default. The fourth needs docker and is excluded by the
+The first three run by default. The fourth needs podman or docker and is excluded by the
 default test setup, so it has to be asked for:
 
 ```sh
 meson test -C _build --suite core
-meson test -C _build --setup docker --suite integration --print-errorlogs
+meson test -C _build --setup engine --suite integration --print-errorlogs
 ```
 
 It takes about 70 seconds warm, several minutes on a cold image cache, and exits
-77 — meson's *skipped* — when docker or a new enough compose plugin is missing.
+77 — meson's *skipped* — when no engine or no new enough compose is around.
 
 ## Architecture in one paragraph
 
@@ -43,7 +43,7 @@ It takes about 70 seconds warm, several minutes on a cold image cache, and exits
 the compiler, which is a pure function from state to `{ yaml, warnings }`. That
 is what makes the golden-file test possible — the demo topology must compile
 byte-for-byte to `tests/data/demo.docker-compose.yml`. `src/lab/` is everything
-that touches the outside world (docker, subprocesses, the filesystem) and is
+that touches the outside world (the container engine, subprocesses, the filesystem) and is
 still GTK-free, so the lifecycle is testable from a plain test binary.
 `src/ui/` is the application; `src/cli/` is `netlab-compile`, a headless driver
 that turns JSON on stdin into a compose file on stdout. Nothing under
@@ -226,8 +226,8 @@ src/
     serialize.vala normalize.vala   JSON in and out, and the trust boundary
     derive.vala validate.vala   networks, interfaces, diagnostics
     compile.vala demo.vala      the compose file, and the demo topology
-  lab/                          docker, subprocesses, the lab directory — no GTK
-    paths.vala docker.vala compose.vala session.vala
+  lab/                          the engine, subprocesses, the lab directory — no GTK
+    paths.vala engine.vala compose.vala session.vala
   cli/netlab-compile.vala       headless driver for the core library
   ui/
     application.vala window.vala window.ui    the shell
@@ -270,7 +270,7 @@ a hyphen is valid in neither identifier.
 ## Expected build warnings
 
 Five `-Wincompatible-pointer-types` warnings, four pointing at
-`src/ui/application.vala` and one at `src/lab/docker.vala`. They are
+`src/ui/application.vala` and one at `src/lab/engine.vala`. They are
 const-correctness artifacts of valac's generated C, not defects in the Vala
 source, and cannot be suppressed from the command line: valac writes
 `#pragma GCC diagnostic warning "-Wincompatible-pointer-types"` into the C it

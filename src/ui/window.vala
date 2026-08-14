@@ -269,7 +269,7 @@ namespace NetworkingLab {
                true — the generate dialog still shows the file whatever the
                diagnostics say. Booting is the case where it is worth asking: a
                duplicate address or an unreachable gateway costs a minute of
-               pulling and then fails in a way that reads like a docker problem
+               pulling and then fails in a way that reads like an engine problem
                (PLAN 9.2). */
             var dialog = new Adw.AlertDialog (
                 _("Start the lab despite errors?"),
@@ -376,7 +376,7 @@ namespace NetworkingLab {
            to. Saying so beats a tab that dies the moment it opens. */
         private bool reachable (Core.Node node) {
             if (!node.device_type.is_service ()) {
-                report (_("A switch is a docker network, not a container — there is nothing to log into."));
+                report (_("A switch is a bridge network, not a container — there is nothing to log into."));
                 return false;
             }
 
@@ -446,17 +446,17 @@ namespace NetworkingLab {
         private string run_tooltip () {
             switch (lab.availability) {
                 case LabController.Availability.CHECKING:
-                    return _("Checking whether docker is available…");
+                    return _("Checking for a container engine…");
                 case LabController.Availability.UNAVAILABLE:
                     return lab.unavailable_reason;
                 default:
                     return lab.state == Lab.LabState.UP
                         ? _("Stop the lab and remove its containers")
-                        : _("Start the lab with docker compose");
+                        : _("Start the lab with compose");
             }
         }
 
-        /* Docker's own words, not a summary of them: `up` fails for reasons
+        /* The engine's own words, not a summary of them: `up` fails for reasons
            this application cannot anticipate, and the output is the fix. */
         private void show_failure (string title, string detail) {
             report (title);

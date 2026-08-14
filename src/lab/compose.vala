@@ -33,12 +33,12 @@ namespace NetworkingLab.Lab {
     }
 
     public class Compose : Object {
-        public Docker docker { get; construct; }
+        public Engine engine { get; construct; }
         public string project { get; construct; }
         public string file { get; construct; }
 
-        public Compose (Docker docker, string project, string file) {
-            Object (docker: docker, project: project, file: file);
+        public Compose (Engine engine, string project, string file) {
+            Object (engine: engine, project: project, file: file);
         }
 
         public async void up (Cancellable? cancellable = null) throws Error {
@@ -76,7 +76,7 @@ namespace NetworkingLab.Lab {
             foreach (var argument in subcommand) {
                 arguments += argument;
             }
-            return yield docker.run_checked (arguments, cancellable);
+            return yield engine.run_checked (arguments, cancellable);
         }
 
         /* Two shapes are in the wild: one JSON array, or one object per line.

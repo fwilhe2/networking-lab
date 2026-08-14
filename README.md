@@ -17,7 +17,7 @@ from a terminal, in CI, or on a machine that has never seen this application.
 
 There are no tagged releases yet, so a package has to be built. Each build runs
 inside a container of the target distribution, so the only thing needed to build
-one is docker (or podman) — nothing is installed on your machine except the
+one is podman (or docker) — nothing is installed on your machine except the
 finished package.
 
 ### Debian 13 (trixie)
@@ -35,7 +35,8 @@ Debian-derived systems with GTK ≥ 4.12, libadwaita ≥ 1.5 and `libvte-2.91-gt
 will probably work but are not tested.
 
 `apt` will offer to install `docker.io` and `docker-compose` alongside, because
-running a lab needs them. If you already have Docker CE from
+running a lab needs an engine and compose. A machine that already has podman
+satisfies the first half on its own. If you already have Docker CE from
 `download.docker.com`, apt leaves it alone — the recommendation is satisfied by
 either.
 
@@ -57,14 +58,14 @@ flatpak run io.github.fwilhe2.NetworkingLab
 ```
 
 The Flatpak **draws and generates but does not run**. A sandbox cannot reach the
-docker socket, and it should not be given a hole to it: access to the docker
+engine socket, and it should not be given a hole to it: access to the docker
 socket is access to root on the host. The Run button is insensitive there and
 says so, and the build has no embedded terminal, because the GNOME runtime does
 not ship VTE. Generate the compose file and run it from a terminal instead.
 
 ### From source
 
-Without docker, or to hack on it:
+Without a container engine, or to hack on it:
 
 ```sh
 # Debian 13 — the same list debian/control builds against
@@ -87,10 +88,20 @@ installs properly.
 
 ## Running a lab
 
-Booting a lab needs docker with the **compose v2 plugin, 2.23.1 or newer** — the
-generated file uses inline `configs`, which older versions cannot read. Check
-with `docker compose version`. Your user also needs to be able to reach the
-daemon:
+Booting a lab needs **podman or docker**, with **compose v2, 2.23.1 or newer** —
+the generated file uses inline `configs`, which older versions cannot read.
+Check with `podman compose version` or `docker compose version`. Whichever is
+found first on `PATH` is used, **podman before docker**; set
+`NETLAB_ENGINE=docker` to pin the choice on a machine that has both.
+
+With podman, `podman compose` hands the work to the same compose v2 binary and
+talks to it over the podman socket, which is not running by default:
+
+```sh
+systemctl --user start podman.socket        # --now enable to keep it
+```
+
+With docker, your user needs to be able to reach the daemon:
 
 ```sh
 sudo usermod -aG docker "$USER"     # then log out and back in
@@ -147,14 +158,14 @@ move a topology around as `.netlab.json`.
 A running lab is addressed by its project name, which is the *Project name* field
 in the panel. Closing the window does **not** stop the lab — that is deliberate,
 so a reboot of the application does not tear down what you are working on. The
-lab is picked up again next time; `docker compose -p <project> down -v` stops it
-from a terminal.
+lab is picked up again next time; `podman compose -p <project> down -v` (or
+`docker compose …`) stops it from a terminal.
 
 ## When something does not work
 
-- **The Run button is insensitive.** Its tooltip says why: docker not installed,
-  the daemon not reachable (add yourself to the `docker` group), a compose plugin
-  older than 2.23.1, or the Flatpak sandbox.
+- **The Run button is insensitive.** Its tooltip says why: no engine installed,
+  the engine not reachable (start `podman.socket`, or add yourself to the
+  `docker` group), compose older than 2.23.1, or the Flatpak sandbox.
 - **A lab starts but devices cannot reach each other.** Give it a minute: OSPF
   adjacencies form in about 45 seconds and routes appear after the next SPF run.
   The demo's `pc1` can ping `10.0.2.10` after roughly 90 seconds.

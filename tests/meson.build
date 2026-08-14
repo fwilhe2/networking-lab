@@ -41,15 +41,15 @@ test('lab',
   args: ['--tap'],
 )
 
-# The end-to-end lab test, in its own suite because it needs docker, pulls three
-# images and waits for OSPF to converge. Two test setups keep it out of the way:
-# the default one excludes the suite, so a plain `meson test` stays hermetic and
-# fast, and `--setup docker` includes it. The script itself exits 77 — meson's
-# "skipped" — when docker or a new enough compose plugin is missing.
+# The end-to-end lab test, in its own suite because it needs a container engine,
+# pulls three images and waits for OSPF to converge. Two test setups keep it out
+# of the way: the default one excludes the suite, so a plain `meson test` stays
+# hermetic and fast, and `--setup engine` includes it. The script itself exits
+# 77 — meson's "skipped" — when no engine or no new enough compose is around.
 #
-#   meson test -C _build --setup docker --suite integration --print-errorlogs
+#   meson test -C _build --setup engine --suite integration --print-errorlogs
 add_test_setup('default', exclude_suites: ['integration'], is_default: true)
-add_test_setup('docker')
+add_test_setup('engine')
 
 test('demo', files('lab.integration.sh'),
        args: [netlab_compile],

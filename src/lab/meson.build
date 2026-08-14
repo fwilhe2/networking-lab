@@ -4,7 +4,7 @@
 
 netlab_lab_sources = files(
   'paths.vala',
-  'docker.vala',
+  'engine.vala',
   'compose.vala',
   'session.vala',
 )

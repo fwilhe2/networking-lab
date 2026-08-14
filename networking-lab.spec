@@ -34,15 +34,17 @@ BuildRequires:  appstream
 Requires:       adwaita-icon-theme
 Requires:       hicolor-icon-theme
 
-# Docker is located at run time and done without: the designer, the compiler
-# and the export all work with no container runtime present, and the run
-# controls explain why they are insensitive. Hence Recommends.
+# The container engine is located at run time and done without: the designer,
+# the compiler and the export all work with none present, and the run controls
+# explain why they are insensitive. Hence Recommends.
 #
 # Rich dependencies rather than a bare package name, for the same reason the
 # Debian package uses alternatives: naming only the distribution's own package
 # makes a machine running docker-ce from download.docker.com pull a second,
 # conflicting stack in order to satisfy a recommendation it already meets.
-Recommends:     (moby-engine or docker-ce)
+# podman leads the set, matching the order the application probes in; on Fedora
+# it is usually installed already.
+Recommends:     (podman or moby-engine or docker-ce)
 Recommends:     (docker-compose or docker-compose-plugin)
 
 %description
