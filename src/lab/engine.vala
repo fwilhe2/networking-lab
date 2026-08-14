@@ -64,6 +64,19 @@ namespace NetworkingLab.Lab {
          * the two to hand a generated file to. */
         public const string[] CANDIDATES = { "podman", "docker" };
 
+        /* Searched after PATH. A GUI application on macOS inherits launchd's
+         * minimal PATH — /usr/bin:/bin:/usr/sbin:/sbin — not the one the user's
+         * shell builds, so neither Homebrew nor the Podman Desktop installer is
+         * on it and an app launched from Finder would report "not installed"
+         * while the terminal two windows over runs podman happily. Harmless
+         * elsewhere: three stat calls, and /usr/local/bin is a real place to
+         * install things on Linux too. */
+        public const string[] EXTRA_DIRS = {
+            "/opt/homebrew/bin",    /* Homebrew, Apple silicon */
+            "/usr/local/bin",       /* Homebrew on Intel; Docker Desktop's symlink */
+            "/opt/podman/bin",      /* the podman-installer .pkg */
+        };
+
         public string program { get; private set; }
         public string compose_version { get; private set; default = ""; }
 
@@ -71,16 +84,38 @@ namespace NetworkingLab.Lab {
             this.program = program;
         }
 
+        /* PATH first, then the well-known directories. An absolute NETLAB_ENGINE
+         * is honoured as-is, because g_find_program_in_path returns an absolute
+         * argument unchanged when it is executable — which is the escape hatch
+         * for an engine installed somewhere nobody expected.
+         *
+         * `extra_dirs` is a parameter only so the test can point it at a
+         * sandbox; every caller uses the default. */
+        public static string? find_program (string name, string[] extra_dirs = EXTRA_DIRS) {
+            var found = Environment.find_program_in_path (name);
+            if (found != null) {
+                return found;
+            }
+
+            foreach (var dir in extra_dirs) {
+                var candidate = Path.build_filename (dir, name);
+                if (FileUtils.test (candidate, FileTest.IS_EXECUTABLE)) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+
         /* The engine's plain name, for the commands the user is shown and the
          * terminal runs. Falls back to the first candidate so there is always
          * something to print, including before a probe has run. */
         public static string program_name () {
             foreach (var name in candidates ()) {
-                if (Environment.find_program_in_path (name) != null) {
-                    return name;
+                if (find_program (name) != null) {
+                    return Path.get_basename (name);
                 }
             }
-            return candidates ()[0];
+            return Path.get_basename (candidates ()[0]);
         }
 
         private static string[] candidates () {
@@ -97,15 +132,16 @@ namespace NetworkingLab.Lab {
         public static async Engine probe (Cancellable? cancellable = null) throws Error {
             string? program = null;
             foreach (var name in candidates ()) {
-                program = Environment.find_program_in_path (name);
+                program = find_program (name);
                 if (program != null) {
                     break;
                 }
             }
             if (program == null) {
                 throw new LabError.NOT_INSTALLED (
-                    "no container engine on PATH (looked for %s)"
-                        .printf (string.joinv (", ", candidates ())));
+                    "no container engine found (looked for %s on PATH and in %s)"
+                        .printf (string.joinv (", ", candidates ()),
+                                 string.joinv (", ", EXTRA_DIRS)));
             }
 
             var engine = new Engine ((!) program);
@@ -137,14 +173,44 @@ namespace NetworkingLab.Lab {
             var ready = yield engine.run ({ "compose", "ls" }, cancellable);
             if (!ready.ok) {
                 throw new LabError.UNAVAILABLE (
-                    "%s is not reachable (%s)%s".printf (
-                        name, ready.message (),
-                        name == "podman"
-                            ? "\n\nTry: systemctl --user start podman.socket"
-                            : ""));
+                    "%s is not reachable (%s)%s".printf (name, ready.message (), hint (name)));
             }
 
             return engine;
+        }
+
+        /* What to actually do about an engine that does not answer. compose
+         * delegates through a socket, and the message it prints when that
+         * socket is missing describes a docker daemon whatever the engine is,
+         * so the useful half of the report is this line.
+         *
+         * podman is not reachable for a different reason on each platform: on
+         * macOS the Linux VM is not running, on Linux the socket unit is not
+         * started. The platform is a build-time fact, hence the define rather
+         * than a run-time test. */
+        private static string hint (string name) {
+            if (name != "podman") {
+                return "";
+            }
+#if MACOS
+            return "\n\nTry: podman machine start";
+#else
+            return "\n\nTry: systemctl --user start podman.socket";
+#endif
+        }
+
+        /* The engine's own directory, ahead of whatever PATH we inherited.
+         *
+         * Finding the program is only half of it: `podman compose` is not a
+         * subcommand but a lookup of an external provider — the docker-compose
+         * binary — on the PATH podman is *given*. An app launched from Finder
+         * hands it launchd's PATH, so podman found in /opt/homebrew/bin would
+         * then fail to find the compose provider sitting beside it and report
+         * no compose support. Passing its directory down fixes both halves with
+         * one line. */
+        private string child_path () {
+            var inherited = Environment.get_variable ("PATH") ?? "/usr/bin:/bin";
+            return Path.get_dirname (program) + Path.SEARCHPATH_SEPARATOR_S + inherited;
         }
 
         private static string last_line (string text) {
@@ -164,6 +230,7 @@ namespace NetworkingLab.Lab {
             }
 
             var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_PIPE);
+            launcher.setenv ("PATH", child_path (), true);
             var process = launcher.spawnv (command);
 
             string? output;

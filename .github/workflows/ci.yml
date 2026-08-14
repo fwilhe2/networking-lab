@@ -55,6 +55,64 @@ jobs:
           path: _build/meson-logs/
           if-no-files-found: ignore
 
+  macos:
+    name: macOS app (Apple silicon)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      # gettext is keg-only, so msgfmt is not linked into the prefix; the build
+      # needs it on PATH. dylibbundler is what makes the result self-contained.
+      - name: Install build dependencies
+        run: |
+          brew install --quiet meson ninja vala gtk4 libadwaita json-glib \
+            gettext dylibbundler
+          echo "$(brew --prefix gettext)/bin" >> "$GITHUB_PATH"
+
+      # Builds, runs the suite, assembles and signs the bundle — the same script
+      # a developer with Homebrew runs, so a green job means that command works.
+      - name: Build the bundle
+        run: tools/build-macos-app.sh
+
+      # The bundle must not reach outside itself. A single Homebrew path left in
+      # a load command is the difference between an app that runs on any Mac and
+      # one that runs only on the machine that built it, and nothing else in
+      # this job would notice.
+      - name: Check that nothing links back to Homebrew
+        run: |
+          app="dist/Networking Lab.app"
+          leaked=$(
+            find "$app/Contents/MacOS" "$app/Contents/libs" -type f -perm +111 \
+              -exec otool -L {} + | grep -E '/opt/homebrew|/usr/local/(Cellar|opt)' || true
+          )
+          if [ -n "$leaked" ]; then
+            echo "$leaked"
+            exit 1
+          fi
+          echo "no Homebrew paths in any load command"
+
+      # Starting the process proves every dylib resolves and the schemas are
+      # where the launcher says. --help returns before a window is needed, which
+      # is as far as a headless runner can go.
+      - name: Smoke test
+        run: |
+          "dist/Networking Lab.app/Contents/MacOS/networking-lab" --help
+          codesign --verify --deep --strict "dist/Networking Lab.app"
+
+      - name: Upload the app
+        uses: actions/upload-artifact@v7
+        with:
+          name: networking-lab-macos-arm64
+          path: dist/NetworkingLab-macos-*.zip
+
+      - name: Upload Meson logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: meson-logs-macos
+          path: _build-macos/meson-logs/
+          if-no-files-found: ignore
+
   flatpak:
     name: Flatpak (GNOME 50)
     runs-on: ubuntu-latest

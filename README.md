@@ -63,6 +63,26 @@ socket is access to root on the host. The Run button is insensitive there and
 says so, and the build has no embedded terminal, because the GNOME runtime does
 not ship VTE. Generate the compose file and run it from a terminal instead.
 
+### macOS (Apple silicon)
+
+CI builds a signed, self-contained `Networking Lab.app` on every push. There are
+no releases yet, so it comes from the run's artifacts: open the latest green
+[CI run](https://github.com/fwilhe2/networking-lab/actions/workflows/ci.yml),
+download **networking-lab-macos-arm64**, unzip it and drag the app into
+`/Applications`.
+
+The bundle carries GTK, libadwaita and their data with it — Homebrew is not
+needed to *run* it, only podman is, and only to boot a lab. It is ad-hoc signed
+rather than notarised, so macOS quarantines the download until you say
+otherwise:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Networking Lab.app"
+```
+
+Intel Macs are not built; `tools/build-macos-app.sh` produces the same bundle on
+one if you have Homebrew.
+
 ### From source
 
 Without a container engine, or to hack on it:
@@ -86,15 +106,28 @@ meson devenv -C _build networking-lab
 GSettings schema where the application looks for it. `meson install -C _build`
 installs properly.
 
+On macOS the dependencies come from Homebrew — `brew install meson vala gtk4
+libadwaita json-glib gettext` — and the build is the same three commands. Only
+the lab side has been made macOS-aware on purpose (engine discovery, the
+`podman machine` hints below); the GTK build there is not covered by CI, and
+there is no packaged `.app`.
+
 ## Running a lab
 
 Booting a lab needs **podman or docker**, with **compose v2, 2.23.1 or newer** —
 the generated file uses inline `configs`, which older versions cannot read.
 Check with `podman compose version` or `docker compose version`. Whichever is
-found first on `PATH` is used, **podman before docker**; set
-`NETLAB_ENGINE=docker` to pin the choice on a machine that has both.
+found first is used, **podman before docker**; set `NETLAB_ENGINE=docker` to pin
+the choice on a machine that has both. `NETLAB_ENGINE` also takes an absolute
+path, for an engine installed somewhere unusual.
 
-With podman, `podman compose` hands the work to the same compose v2 binary and
+The search is `PATH` first, then `/opt/homebrew/bin`, `/usr/local/bin` and
+`/opt/podman/bin` — the last three because a windowed application does not
+always inherit the `PATH` your shell has.
+
+### Linux
+
+`podman compose` hands the work to the same compose v2 binary docker uses, and
 talks to it over the podman socket, which is not running by default:
 
 ```sh
@@ -107,8 +140,29 @@ With docker, your user needs to be able to reach the daemon:
 sudo usermod -aG docker "$USER"     # then log out and back in
 ```
 
-Without any of that the application still designs, generates and exports; only
-the Run button is insensitive, with the reason in its tooltip.
+### macOS
+
+podman runs the containers inside a Linux VM, so that VM has to exist and be
+running. compose is a separate binary that podman calls out to:
+
+```sh
+brew install podman docker-compose
+podman machine init          # once
+podman machine start         # after each reboot
+```
+
+Nothing is shared into the VM: the generated file carries every router's
+configuration inline (that is what the compose 2.23.1 floor is for), so no
+directory has to be mounted through `podman machine` for a lab to boot. The
+three default images — FRR, Alpine and Python — are published for arm64, so
+Apple silicon runs them natively rather than emulated.
+
+Docker Desktop works too; its `docker` is in `/usr/local/bin`, which is
+searched.
+
+Without an engine the application still designs, generates and exports; only the
+Run button is insensitive, with the reason in its tooltip — including the
+command to start whatever is not running.
 
 ## Using it
 
