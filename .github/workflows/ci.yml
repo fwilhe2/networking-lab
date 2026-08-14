@@ -57,9 +57,11 @@ jobs:
 
   macos:
     name: macOS app (Apple silicon)
-    # macos-26-arm64 rather than the macos-26 alias: the label is explicit
-    # about the architecture, and the bundle this job uploads is arm64-only.
-    runs-on: macos-26-arm64
+    # macos-15 is the current generally available image, and arm64 — which is
+    # what the bundle this job uploads is built for. macos-26-arm64 exists as a
+    # label but never picked up a runner: the job sat queued while every other
+    # job in the workflow finished.
+    runs-on: macos-15
     # A bundling step that stops to ask a question has nobody to answer it, and
     # the default limit for that is six hours of a runner. Half an hour is
     # already four times the honest build.
