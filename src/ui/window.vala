@@ -21,7 +21,7 @@ namespace NetworkingLab {
         [GtkChild] private unowned Gtk.ToggleButton select_mode_button;
         [GtkChild] private unowned Gtk.ToggleButton link_mode_button;
         [GtkChild] private unowned Gtk.Label status_label;
-        [GtkChild] private unowned Gtk.Label lab_status_label;
+        [GtkChild] private unowned Gtk.MenuButton lab_status_button;
         [GtkChild] private unowned Gtk.Button run_button;
         [GtkChild] private unowned Adw.ButtonContent run_button_content;
 
@@ -84,6 +84,15 @@ namespace NetworkingLab {
                 if (link_mode_button.active) {
                     set_link_mode (true);
                 }
+            });
+
+            /* Built when it is opened, not on every poll: the list changes every
+               two seconds while a lab is up and nobody is looking at it. */
+            lab_status_button.set_create_popup_func (() => {
+                /* set_popover, not the `popover` property: valac types the
+                   property as GtkPopover and the C setter takes a GtkWidget,
+                   which would add a sixth warning to the documented baseline. */
+                lab_status_button.set_popover (containers_popover ());
             });
 
             on_lab_changed ();
@@ -409,8 +418,91 @@ namespace NetworkingLab {
             canvas.grab_focus ();
         }
 
+        /* ── what is actually running (PLAN 9.2) ────────────────────── */
+
+        /* The canvas marks say running or not; this says which container, in
+           what state, and where the file that describes it lives — the things
+           needed to go looking with the engine's own CLI. */
+        private Gtk.Popover containers_popover () {
+            var box = new Gtk.Box (Gtk.Orientation.VERTICAL, 12);
+            box.append (heading (lab.summary ()));
+
+            var containers = lab.containers ();
+            if (containers.length == 0) {
+                box.append (detail_label (lab.availability == LabController.Availability.UNAVAILABLE
+                    ? lab.unavailable_reason
+                    : _("No containers. Press Run to start the lab.")));
+            } else {
+                var list = new Gtk.ListBox ();
+                list.selection_mode = Gtk.SelectionMode.NONE;
+                list.add_css_class ("boxed-list");
+                for (var i = 0; i < containers.length; i++) {
+                    list.append (container_row (containers[i]));
+                }
+                box.append (list);
+            }
+
+            /* Selectable, because the point of showing the path is being able
+               to paste it into `compose -f`. */
+            var file = lab.compose_file ();
+            if (file != "") {
+                box.append (detail_label ("%s compose -p %s -f %s ps"
+                    .printf (lab.engine_name (), lab.project_name (), file)));
+            }
+
+            var popover = new Gtk.Popover ();
+            popover.child = box;
+            popover.width_request = 380;
+            return popover;
+        }
+
+        private Adw.ActionRow container_row (Lab.ContainerStatus status) {
+            var row = new Adw.ActionRow ();
+            row.title = status.name;
+            row.subtitle = container_detail (status);
+
+            var icon = new Gtk.Image.from_icon_name (status.running
+                ? "media-playback-start-symbolic"
+                : "process-stop-symbolic");
+            icon.add_css_class (status.running ? "success" : "error");
+            row.add_prefix (icon);
+            return row;
+        }
+
+        /* An exit code is the difference between "it stopped" and why. */
+        private string container_detail (Lab.ContainerStatus status) {
+            var detail = status.state == "" ? _("unknown") : status.state;
+
+            if (!status.running && status.exit_code != 0) {
+                detail += _(" — exit code %d").printf (status.exit_code);
+            }
+            if (status.health != "") {
+                detail += " — " + status.health;
+            }
+            return detail;
+        }
+
+        private Gtk.Label heading (string text) {
+            var label = new Gtk.Label (text);
+            label.xalign = 0;
+            label.wrap = true;
+            label.add_css_class ("heading");
+            return label;
+        }
+
+        private Gtk.Label detail_label (string text) {
+            var label = new Gtk.Label (text);
+            label.xalign = 0;
+            label.wrap = true;
+            label.wrap_mode = Pango.WrapMode.WORD_CHAR;
+            label.selectable = true;
+            label.add_css_class ("dim-label");
+            label.add_css_class ("caption");
+            return label;
+        }
+
         private void on_lab_changed () {
-            lab_status_label.label = lab.summary ();
+            lab_status_button.label = lab.summary ();
             canvas.queue_draw ();
 
             var up = lab.state == Lab.LabState.UP;
