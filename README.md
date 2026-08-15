@@ -197,6 +197,11 @@ elsewhere. **Logs** follows a device's output in the same way.
 
 Press `?` for the full list of shortcuts.
 
+**Practising.** `EXERCISES.md` is a set of tasks for the demo topology — count the hops
+without traceroute, break the netmask and recognise the symptom, pull a link and time the
+OSPF recovery, replace the routing protocol with static routes. Every command in it has been
+run against the demo lab.
+
 ## Where your files go
 
 | What | Where |
