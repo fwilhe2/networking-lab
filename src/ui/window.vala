@@ -432,6 +432,19 @@ namespace NetworkingLab {
                 box.append (detail_label (lab.availability == LabController.Availability.UNAVAILABLE
                     ? lab.unavailable_reason
                     : _("No containers. Press Run to start the lab.")));
+                /* The engine is probed once, at startup — which is exactly when
+                   a rootless socket or a Docker VM is least likely to be up. A
+                   way to ask again beats restarting the application. */
+                if (lab.availability == LabController.Availability.UNAVAILABLE) {
+                    var retry = new Gtk.Button.with_label (_("Try Again"));
+                    retry.halign = Gtk.Align.START;
+                    retry.clicked.connect (() => {
+                        lab_status_button.popdown ();
+                        lab.recheck ();
+                        report (_("Looking for a container engine…"));
+                    });
+                    box.append (retry);
+                }
             } else {
                 var list = new Gtk.ListBox ();
                 list.selection_mode = Gtk.SelectionMode.NONE;
@@ -440,6 +453,15 @@ namespace NetworkingLab {
                     list.append (container_row (containers[i]));
                 }
                 box.append (list);
+            }
+
+            /* A poll that fails leaves the last known list on screen, which is
+               the right thing to draw and the wrong thing to say nothing about:
+               without this the list is simply stale and looks current. */
+            if (lab.poll_error != "") {
+                var stale = detail_label (_("The last check failed: %s").printf (lab.poll_error));
+                stale.add_css_class ("warning");
+                box.append (stale);
             }
 
             /* Selectable, because the point of showing the path is being able

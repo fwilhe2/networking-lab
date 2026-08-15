@@ -45,13 +45,14 @@ namespace NetworkingLab.Lab {
             /* --quiet-pull because the pull progress is a redraw storm nobody
              * reads; --remove-orphans because an edited topology leaves the
              * containers of deleted devices behind otherwise. */
-            yield run ({ "up", "-d", "--quiet-pull", "--remove-orphans" }, cancellable);
+            yield run ({ "up", "-d", "--quiet-pull", "--remove-orphans" },
+                       cancellable, Engine.TIMEOUT_BOOT);
         }
 
         /* -v removes the networks and any anonymous volumes. Destroying state is
          * why the caller is expected to confirm first (PLAN 9.2). */
         public async void down (Cancellable? cancellable = null) throws Error {
-            yield run ({ "down", "-v", "--remove-orphans" }, cancellable);
+            yield run ({ "down", "-v", "--remove-orphans" }, cancellable, Engine.TIMEOUT_BOOT);
         }
 
         /* --all, not just the running ones: a container that exited on boot is
@@ -71,12 +72,13 @@ namespace NetworkingLab.Lab {
             return result.output + result.errors;
         }
 
-        private async CommandResult run (string[] subcommand, Cancellable? cancellable) throws Error {
+        private async CommandResult run (string[] subcommand, Cancellable? cancellable,
+                                         uint timeout_seconds = Engine.TIMEOUT_QUICK) throws Error {
             string[] arguments = { "compose", "-p", project, "-f", file };
             foreach (var argument in subcommand) {
                 arguments += argument;
             }
-            return yield engine.run_checked (arguments, cancellable);
+            return yield engine.run_checked (arguments, cancellable, timeout_seconds);
         }
 
         /* Two shapes are in the wild: one JSON array, or one object per line.

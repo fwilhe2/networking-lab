@@ -54,6 +54,13 @@ if [ "$command" = "${NETLAB_STUB_FAIL:-}" ]; then
   exit 1
 fi
 
+# An engine that accepts the command and never answers. The sleep is a child
+# of this script and inherits its pipes, which is the point: it reproduces the
+# grandchild that keeps stdout open after the engine itself has been killed.
+if [ "$command" = "${NETLAB_STUB_HANG:-}" ]; then
+  sleep 20
+fi
+
 if [ "$command" = "ps" ] && [ -f "${NETLAB_STUB_PS:-}" ]; then
   cat "$NETLAB_STUB_PS"
 fi
@@ -422,6 +429,57 @@ void test_probe_without_a_daemon () {
     }
 }
 
+/* The one thing an engine that stops answering must not do is take the caller
+ * with it. The stub sleeps for twenty seconds and leaves a child holding the
+ * pipes; a one-second budget has to come back anyway, which it only does if
+ * the wait itself is ended rather than just the engine killed. */
+void test_a_hanging_engine_times_out () {
+    stub_reset ();
+    Environment.set_variable ("NETLAB_STUB_HANG", "ps", true);
+
+    Engine engine;
+    try {
+        engine = probe_engine ();
+    } catch (Error e) {
+        Test.fail_printf ("probe failed: %s", e.message);
+        return;
+    }
+
+    var started = get_monotonic_time ();
+    CommandResult? result = null;
+    var pending = new Pending ();
+
+    engine.run.begin ({ "compose", "ps" }, null, 1, (object, res) => {
+        try {
+            result = engine.run.end (res);
+            pending.finish (null);
+        } catch (Error e) {
+            pending.finish (e);
+        }
+    });
+
+    try {
+        pending.wait ();
+    } catch (Error e) {
+        Test.fail_printf ("expected a timed-out result, got an error: %s", e.message);
+        Environment.unset_variable ("NETLAB_STUB_HANG");
+        return;
+    }
+
+    var seconds = (get_monotonic_time () - started) / 1000000.0;
+    Environment.unset_variable ("NETLAB_STUB_HANG");
+
+    assert (result != null);
+    assert (!((!) result).ok);
+    assert ("did not answer" in ((!) result).message ());
+
+    /* Generous, because the assertion is "it did not wait for the child",
+     * not "it was punctual". */
+    if (seconds > 10) {
+        Test.fail_printf ("the call took %.1fs — it waited for the child instead of timing out", seconds);
+    }
+}
+
 void test_version_comparison () {
     assert (Engine.version_at_least ("2.23.1", "2.23.1"));
     assert (Engine.version_at_least ("2.29.7", "2.23.1"));
@@ -674,6 +732,7 @@ int main (string[] args) {
     Test.add_func ("/lab/engine/no-compose", test_probe_without_the_compose_plugin);
     Test.add_func ("/lab/engine/old-compose", test_probe_with_an_old_compose_plugin);
     Test.add_func ("/lab/engine/no-daemon", test_probe_without_a_daemon);
+    Test.add_func ("/lab/engine/timeout", test_a_hanging_engine_times_out);
     Test.add_func ("/lab/engine/versions", test_version_comparison);
 
     Test.add_func ("/lab/paths/data-dir", test_paths_are_under_the_data_directory);

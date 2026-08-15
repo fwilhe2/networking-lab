@@ -223,19 +223,83 @@ namespace NetworkingLab.Lab {
             return found;
         }
 
-        public async CommandResult run (string[] arguments, Cancellable? cancellable = null) throws Error {
+        /* Nothing waits forever. An engine that accepts a command and never
+         * answers — a socket in a half-open state, a compose provider stopped
+         * on a question — would otherwise leave the caller's `yield` pending
+         * for the rest of the session: the poll guard stays set, the lab stays
+         * STARTING, and Run stays insensitive. From the outside that is
+         * indistinguishable from the application having frozen, which is the
+         * whole reason these two numbers exist.
+         *
+         * Two budgets, because `ps` and `up` are not the same kind of wait.
+         * `ps` answers in about 70ms against a real podman; `up` on a cold
+         * cache pulls three images. */
+        public const uint TIMEOUT_QUICK = 30;
+        public const uint TIMEOUT_BOOT = 900;
+
+        public async CommandResult run (string[] arguments, Cancellable? cancellable = null,
+                                        uint timeout_seconds = TIMEOUT_QUICK) throws Error {
             string[] command = { program };
             foreach (var argument in arguments) {
                 command += argument;
             }
 
-            var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE | SubprocessFlags.STDERR_PIPE);
+            /* Neither STDIN_PIPE nor STDIN_INHERIT, so GSubprocess gives the
+             * child /dev/null: an engine that asks a question — podman's
+             * short-name prompt is the one to expect — reads EOF and fails
+             * instead of waiting on a stdin nobody is watching. */
+            var launcher = new SubprocessLauncher (SubprocessFlags.STDOUT_PIPE
+                                                   | SubprocessFlags.STDERR_PIPE);
             launcher.setenv ("PATH", child_path (), true);
             var process = launcher.spawnv (command);
 
-            string? output;
-            string? errors;
-            yield process.communicate_utf8_async (null, cancellable, out output, out errors);
+            /* Cancelling the read as well as killing the child, because the two
+             * are not the same thing: communicate waits for end-of-file, and a
+             * grandchild that inherited the pipes — `podman compose` starts an
+             * external provider — holds them open after its parent is gone.
+             * Waiting on that is the hang this is here to end. */
+            var guard = new Cancellable ();
+            ulong chained = 0;
+            if (cancellable != null) {
+                chained = ((!) cancellable).connect (() => guard.cancel ());
+            }
+
+            var expired = false;
+            uint timer = 0;
+            if (timeout_seconds > 0) {
+                timer = Timeout.add_seconds (timeout_seconds, () => {
+                    timer = 0;
+                    expired = true;
+                    process.force_exit ();
+                    guard.cancel ();
+                    return Source.REMOVE;
+                });
+            }
+
+            string? output = null;
+            string? errors = null;
+            try {
+                yield process.communicate_utf8_async (null, guard, out output, out errors);
+            } catch (Error e) {
+                /* The timeout cancels the guard itself, so its own cancellation
+                 * is the expected outcome rather than a failure to report. */
+                if (!expired) {
+                    throw e;
+                }
+            } finally {
+                if (timer != 0) {
+                    Source.remove (timer);
+                }
+                if (chained != 0) {
+                    ((!) cancellable).disconnect (chained);
+                }
+            }
+
+            if (expired) {
+                return new CommandResult (-1, output ?? "",
+                                          "%s did not answer within %us"
+                                              .printf (string.joinv (" ", command), timeout_seconds));
+            }
 
             /* A signalled process has no exit status; -1 keeps `ok` false
              * without pretending to know which signal it was. */
@@ -243,8 +307,9 @@ namespace NetworkingLab.Lab {
             return new CommandResult (status, output ?? "", errors ?? "");
         }
 
-        public async CommandResult run_checked (string[] arguments, Cancellable? cancellable = null) throws Error {
-            var result = yield run (arguments, cancellable);
+        public async CommandResult run_checked (string[] arguments, Cancellable? cancellable = null,
+                                                uint timeout_seconds = TIMEOUT_QUICK) throws Error {
+            var result = yield run (arguments, cancellable, timeout_seconds);
             if (!result.ok) {
                 throw new LabError.FAILED (result.message ());
             }
