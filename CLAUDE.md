@@ -92,6 +92,14 @@ lab that is down changes only when this application starts it, so an idle poll w
 subprocess every two seconds for no news. The window asks it two questions: "can I run?"
 (`can_run`, `availability`, `unavailable_reason`) and "is this device up?" (`mark_for`).
 
+**`changed` means something actually moved.** `Session.refresh` compares the fresh `ps`
+against the previous one and stays silent when they match; the controller emits on its own
+account only when the poll starts or stops failing. That is not tidiness: the signal ends in
+`canvas.queue_draw ()`, and the canvas is one 2200×1400 Cairo surface — 4× that at maximum
+zoom — so a poll that reports unchanged news is a full redraw of the drawing every two
+seconds for as long as the lab is up. Measured on an idle lab: 53 → 16 CPU ticks a minute.
+Keep any new poll-driven signal to the same rule.
+
 Two consequences of the lab being a view rather than part of the document: it is never
 undone or autosaved, and **closing the window does not stop the lab**. The containers are
 adopted again on the next start, which is the point — but a driving session that starts a

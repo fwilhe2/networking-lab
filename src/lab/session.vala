@@ -107,14 +107,23 @@ namespace NetworkingLab.Lab {
          * updates the container list without touching the state, so a slow
          * `up` is not reported as finished by the poll that runs during it. */
         public async void refresh (Cancellable? cancellable = null) throws Error {
-            yield refresh_statuses (cancellable);
+            var moved = yield refresh_statuses (cancellable);
 
             if (state.busy ()) {
-                changed ();
+                if (moved) {
+                    changed ();
+                }
                 return;
             }
 
-            enter_state (statuses.size () > 0 ? LabState.UP : LabState.DOWN);
+            /* Silence when nothing moved, which is what a poll usually finds.
+             * `changed` costs a full canvas redraw — 2200×1400 at zoom, every
+             * two seconds, for the rest of the lab's life — and a lab that is
+             * simply up is the case where that buys nothing at all. */
+            var next = statuses.size () > 0 ? LabState.UP : LabState.DOWN;
+            if (moved || next != state) {
+                enter_state (next);
+            }
         }
 
         public async string logs (string? device_name, int tail = 200,
@@ -164,13 +173,15 @@ namespace NetworkingLab.Lab {
             return list;
         }
 
-        private async void refresh_statuses (Cancellable? cancellable) throws Error {
+        /* True when the picture actually differs from the one it replaces. */
+        private async bool refresh_statuses (Cancellable? cancellable) throws Error {
             /* No file means the lab has never been generated, and `compose -f`
              * on a missing file is an error rather than an empty
              * answer. */
             if (!FileUtils.test (compose_file, FileTest.EXISTS)) {
+                var had = statuses.size () > 0;
                 statuses.remove_all ();
-                return;
+                return had;
             }
 
             var list = yield compose.ps (cancellable);
@@ -181,7 +192,29 @@ namespace NetworkingLab.Lab {
             for (var i = 0; i < list.length; i++) {
                 fresh.insert (list[i].name, list[i]);
             }
+
+            var moved = differs (statuses, fresh);
             statuses = fresh;
+            return moved;
+        }
+
+        private static bool differs (HashTable<string, ContainerStatus> before,
+                                     HashTable<string, ContainerStatus> after) {
+            if (before.size () != after.size ()) {
+                return true;
+            }
+
+            foreach (var name in after.get_keys ()) {
+                var was = before.lookup (name);
+                var now = after.lookup (name);
+                if (was == null
+                    || was.state != now.state
+                    || was.health != now.health
+                    || was.exit_code != now.exit_code) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private async void settle () {

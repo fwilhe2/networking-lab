@@ -286,6 +286,8 @@ namespace NetworkingLab {
 
             /* `ps` is quick, but not quicker than the timer on a loaded
              * machine; overlapping polls would queue up behind each other. */
+            var was_failing = poll_error != "";
+
             polling = true;
             try {
                 yield lab.refresh ();
@@ -308,7 +310,17 @@ namespace NetworkingLab {
             if (lab.state != Lab.LabState.DOWN) {
                 watch ();
             }
-            changed ();
+
+            /* Not on every poll. The session raises `changed` itself when the
+             * containers or the state actually moved, and this signal ends in a
+             * full canvas redraw; emitting it twice a second for news that has
+             * not changed since the last one is how an idle lab came to cost a
+             * redraw of the whole drawing every two seconds. What is left is
+             * the part the session cannot see: the poll starting or stopping
+             * to fail. */
+            if ((poll_error != "") != was_failing) {
+                changed ();
+            }
         }
 
         /* The session is bound to a compose project name, which comes from the

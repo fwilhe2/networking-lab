@@ -696,6 +696,50 @@ void test_session_adopts_a_lab_it_did_not_start () {
     assert (session.running_count () == 4);
 }
 
+/* A poll that finds exactly what the last one found has nothing to report, and
+ * saying so anyway costs a redraw of the whole canvas every two seconds for as
+ * long as the lab is up. The state has to keep arriving, though: the poll after
+ * a container dies is the one that matters. */
+void test_an_unchanged_poll_says_nothing () {
+    stub_reset ();
+
+    try {
+        write_compose ("netlab-quiet", "name: netlab-quiet\n");
+    } catch (Error e) {
+        Test.fail_printf ("could not prepare the lab: %s", e.message);
+        return;
+    }
+    stub_ps (PS_ALL_RUNNING);
+
+    var session = session_for ("netlab-quiet");
+    var reports = 0;
+    session.changed.connect (() => reports++);
+
+    try {
+        refresh (session);      /* DOWN → UP: news */
+        assert (reports == 1);
+
+        refresh (session);      /* the same four containers: no news */
+        refresh (session);
+        assert (reports == 1);
+
+        /* One of them died: news again. */
+        stub_ps ("""
+[{"Name":"pc1","Service":"pc1","State":"running","Health":"","ExitCode":0},
+ {"Name":"r1","Service":"r1","State":"running","Health":"","ExitCode":0},
+ {"Name":"r2","Service":"r2","State":"running","Health":"","ExitCode":0},
+ {"Name":"srv1","Service":"srv1","State":"exited","Health":"","ExitCode":1}]
+""");
+        refresh (session);
+    } catch (Error e) {
+        Test.fail_printf ("refresh failed: %s", e.message);
+        return;
+    }
+
+    assert (reports == 2);
+    assert (session.partially_running ());
+}
+
 void test_refresh_without_a_compose_file_asks_the_engine_nothing () {
     stub_reset ();
     stub_ps (PS_ALL_RUNNING);
@@ -746,6 +790,7 @@ int main (string[] args) {
     Test.add_func ("/lab/session/partial", test_session_reports_a_partial_start);
     Test.add_func ("/lab/session/failed-up", test_session_reports_a_failed_up);
     Test.add_func ("/lab/session/adopt", test_session_adopts_a_lab_it_did_not_start);
+    Test.add_func ("/lab/session/quiet-poll", test_an_unchanged_poll_says_nothing);
     Test.add_func ("/lab/session/no-file", test_refresh_without_a_compose_file_asks_the_engine_nothing);
 
     var status = Test.run ();

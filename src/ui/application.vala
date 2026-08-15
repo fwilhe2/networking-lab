@@ -60,15 +60,19 @@ namespace NetworkingLab {
          *
          * One wakeup every two seconds, and it prints nothing at all unless
          * something actually blocked. */
-        private const uint WATCHDOG_SECONDS = 2;
+        /* Timeout.add, not add_seconds: a second-granularity timer is allowed
+         * to arrive up to a second late so that GLib can coalesce it with
+         * other wakeups, which this reads as a one-second stall — an
+         * instrument that manufactures the thing it measures. */
+        private const uint WATCHDOG_MS = 2000;
         private const int64 WATCHDOG_TOLERANCE_US = 1000000;
 
         private void start_watchdog () {
             var last = get_monotonic_time ();
 
-            Timeout.add_seconds (WATCHDOG_SECONDS, () => {
+            Timeout.add (WATCHDOG_MS, () => {
                 var now = get_monotonic_time ();
-                var late = now - last - WATCHDOG_SECONDS * 1000000;
+                var late = now - last - WATCHDOG_MS * 1000;
                 last = now;
 
                 if (late > WATCHDOG_TOLERANCE_US) {
