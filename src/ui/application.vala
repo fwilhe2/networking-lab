@@ -44,6 +44,42 @@ namespace NetworkingLab {
             settings = new GLib.Settings (Config.APP_ID);
             settings.changed["color-scheme"].connect (apply_color_scheme);
             apply_color_scheme ();
+
+            start_watchdog ();
+        }
+
+        /* A stall the user can name.
+         *
+         * A blocked main loop and a busy one look identical from the outside:
+         * GTK stops drawing, the window stops answering, and there is nothing
+         * afterwards to say how long it lasted or when. This timer should run
+         * every WATCHDOG_SECONDS; whatever it is late by is time the main loop
+         * spent somewhere it could not be interrupted, and that number in the
+         * log is the difference between "it freezes sometimes" and a bug that
+         * can be found.
+         *
+         * One wakeup every two seconds, and it prints nothing at all unless
+         * something actually blocked. */
+        /* Timeout.add, not add_seconds: a second-granularity timer is allowed
+         * to arrive up to a second late so that GLib can coalesce it with
+         * other wakeups, which this reads as a one-second stall — an
+         * instrument that manufactures the thing it measures. */
+        private const uint WATCHDOG_MS = 2000;
+        private const int64 WATCHDOG_TOLERANCE_US = 1000000;
+
+        private void start_watchdog () {
+            var last = get_monotonic_time ();
+
+            Timeout.add (WATCHDOG_MS, () => {
+                var now = get_monotonic_time ();
+                var late = now - last - WATCHDOG_MS * 1000;
+                last = now;
+
+                if (late > WATCHDOG_TOLERANCE_US) {
+                    warning ("main loop blocked for %.1fs", late / 1000000.0);
+                }
+                return Source.CONTINUE;
+            });
         }
 
         /* SPEC 8.7 pins light and ignores the system preference; the HIG does

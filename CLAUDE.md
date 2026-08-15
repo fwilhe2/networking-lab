@@ -92,6 +92,14 @@ lab that is down changes only when this application starts it, so an idle poll w
 subprocess every two seconds for no news. The window asks it two questions: "can I run?"
 (`can_run`, `availability`, `unavailable_reason`) and "is this device up?" (`mark_for`).
 
+**`changed` means something actually moved.** `Session.refresh` compares the fresh `ps`
+against the previous one and stays silent when they match; the controller emits on its own
+account only when the poll starts or stops failing. That is not tidiness: the signal ends in
+`canvas.queue_draw ()`, and the canvas is one 2200×1400 Cairo surface — 4× that at maximum
+zoom — so a poll that reports unchanged news is a full redraw of the drawing every two
+seconds for as long as the lab is up. Measured on an idle lab: 53 → 16 CPU ticks a minute.
+Keep any new poll-driven signal to the same rule.
+
 Two consequences of the lab being a view rather than part of the document: it is never
 undone or autosaved, and **closing the window does not stop the lab**. The containers are
 adopted again on the next start, which is the point — but a driving session that starts a
@@ -128,6 +136,32 @@ Two things that cost a debugging session, both verified against real podman:
 
 `docker info --format {{.ServerVersion}}` is *not* portable — podman's `info` schema has no
 such field — which is why the probe formats nothing and reads only exit statuses.
+
+#### Nothing waits forever
+
+`Engine.run` carries a budget: `TIMEOUT_QUICK` (30s) for everything, `TIMEOUT_BOOT` (900s)
+for `up` and `down`, which pull images. An engine that accepts a command and never answers
+would otherwise leave the caller's `yield` pending for the rest of the session — the poll
+guard set, the lab stuck in STARTING, Run insensitive — which from the outside is
+indistinguishable from the application having frozen.
+
+The timeout **cancels the read as well as killing the child**, and both halves are load-
+bearing: `communicate` waits for end-of-file, and `podman compose` starts an external
+provider that inherits the pipes and holds them open after its parent is gone. Killing
+alone leaves the wait in place. `tests/lab.vala`'s `NETLAB_STUB_HANG` reproduces exactly
+that — the stub sleeps with a child on the pipes — and asserts the call returns in about a
+second rather than in twenty.
+
+The engine is probed at startup, which is the worst moment to ask: a rootless podman socket
+is often still being activated. `LabController` therefore retries an UNAVAILABLE probe three
+times, three seconds apart — and only that error, since a missing program will still be
+missing — and `recheck ()` behind the container list's **Try Again** is the way back for a
+session that gave up.
+
+`Application.start_watchdog ()` is a two-second timer that logs how late it was whenever
+that exceeds a second. A blocked main loop and a busy one look identical from the outside,
+so without it a freeze leaves nothing behind; with it there is a line naming the duration.
+It prints nothing when the loop is healthy — verified with SIGSTOP.
 
 #### Two PATHs, both of which bite on macOS
 

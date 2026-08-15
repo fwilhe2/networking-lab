@@ -38,6 +38,12 @@ namespace NetworkingLab {
          * still looking at it. */
         private const uint POLL_SECONDS = 2;
 
+        /* Three tries, three seconds apart: enough to cover a socket being
+         * activated, short enough that a machine with no engine at all still
+         * says so while the user is still looking at the window. */
+        private const int PROBE_ATTEMPTS = 3;
+        private const uint PROBE_RETRY_SECONDS = 3;
+
         public Document document { get; construct; }
 
         public Availability availability { get; private set; default = Availability.CHECKING; }
@@ -53,6 +59,10 @@ namespace NetworkingLab {
         private Lab.Session? session = null;
         private uint poll_source = 0;
         private bool polling = false;
+
+        /* The last poll failure, or empty. Not a dialog — it is what the
+         * container list shows in place of the containers it could not read. */
+        public string poll_error { get; private set; default = ""; }
 
         public LabController (Document document) {
             Object (document: document);
@@ -72,6 +82,21 @@ namespace NetworkingLab {
 
         /* ── availability ───────────────────────────────────────────── */
 
+        /* Ask again. The probe runs once at startup, and a startup is exactly
+         * when the engine is least likely to answer: a rootless podman socket
+         * is often still being activated, and a Docker Desktop is often still
+         * booting its VM. Without a way back the application spends the rest of
+         * the session insisting there is no engine while the terminal two
+         * windows over runs one. */
+        public void recheck () {
+            if (availability == Availability.CHECKING) {
+                return;
+            }
+            availability = Availability.CHECKING;
+            changed ();
+            probe.begin ();
+        }
+
         private async void probe () {
             /* A hole from the sandbox to the engine socket is a hole to root on
              * the host, so the Flatpak deliberately does not have one. Saying so
@@ -84,13 +109,26 @@ namespace NetworkingLab {
                 return;
             }
 
-            try {
-                engine = yield Lab.Engine.probe ();
-            } catch (Error e) {
-                availability = Availability.UNAVAILABLE;
-                unavailable_reason = e.message;
-                changed ();
-                return;
+            /* A socket that is not up *yet* is the common case at startup, and
+             * it is the only failure worth asking about twice: a missing
+             * program and a compose that is too old will still be missing and
+             * too old in three seconds. */
+            for (var attempt = 1; ; attempt++) {
+                try {
+                    engine = yield Lab.Engine.probe ();
+                    break;
+                } catch (Error e) {
+                    if (!(e is Lab.LabError.UNAVAILABLE) || attempt >= PROBE_ATTEMPTS) {
+                        availability = Availability.UNAVAILABLE;
+                        unavailable_reason = e.message;
+                        changed ();
+                        return;
+                    }
+                    debug ("engine probe %d/%d failed: %s", attempt, PROBE_ATTEMPTS, e.message);
+                }
+
+                Timeout.add_seconds (PROBE_RETRY_SECONDS, probe.callback);
+                yield;
             }
 
             availability = Availability.READY;
@@ -248,20 +286,41 @@ namespace NetworkingLab {
 
             /* `ps` is quick, but not quicker than the timer on a loaded
              * machine; overlapping polls would queue up behind each other. */
+            var was_failing = poll_error != "";
+
             polling = true;
             try {
                 yield lab.refresh ();
+                poll_error = "";
             } catch (Error e) {
                 /* A failed poll keeps the last picture. Reporting it would put
-                 * a dialog on screen every two seconds. */
+                 * a dialog on screen every two seconds; the reason is worth
+                 * keeping, though, because it is what the container list has to
+                 * show instead of an empty list. */
                 debug ("lab poll failed: %s", e.message);
+                poll_error = e.message;
+            } finally {
+                /* In a finally block because the flag is what keeps two polls
+                 * from overlapping: leaking it once — an unexpected error, a
+                 * cancelled call — would stop the lab view updating for the
+                 * rest of the session, with the containers still running. */
+                polling = false;
             }
-            polling = false;
 
             if (lab.state != Lab.LabState.DOWN) {
                 watch ();
             }
-            changed ();
+
+            /* Not on every poll. The session raises `changed` itself when the
+             * containers or the state actually moved, and this signal ends in a
+             * full canvas redraw; emitting it twice a second for news that has
+             * not changed since the last one is how an idle lab came to cost a
+             * redraw of the whole drawing every two seconds. What is left is
+             * the part the session cannot see: the poll starting or stopping
+             * to fail. */
+            if ((poll_error != "") != was_failing) {
+                changed ();
+            }
         }
 
         /* The session is bound to a compose project name, which comes from the
