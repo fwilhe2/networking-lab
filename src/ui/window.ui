@@ -332,10 +332,9 @@
                      to its left: it persists rather than being replaced by the
                      next thing that happens (PLAN 9.2). -->
                 <child>
-                  <object class="GtkLabel" id="lab_status_label">
-                    <property name="xalign">1</property>
-                    <property name="ellipsize">end</property>
-                    <property name="css-classes">dim-label caption</property>
+                  <object class="GtkMenuButton" id="lab_status_button">
+                    <property name="css-classes">flat caption</property>
+                    <property name="tooltip-text" translatable="yes">Show the containers of this lab</property>
                   </object>
                 </child>
               </object>

@@ -169,6 +169,28 @@ namespace NetworkingLab {
             };
         }
 
+        /* Everything `compose ps` reported, sorted, for the container list.
+         * Empty until a session exists — an engine-less run is not an error. */
+        public GenericArray<Lab.ContainerStatus> containers () {
+            return session == null
+                ? new GenericArray<Lab.ContainerStatus> ()
+                : ((!) session).containers ();
+        }
+
+        /* How this lab is addressed, which is what makes it findable from a
+         * terminal that is not this application. */
+        public string project_name () {
+            return session == null ? "" : ((!) session).project;
+        }
+
+        public string compose_file () {
+            return session == null ? "" : ((!) session).compose_file;
+        }
+
+        public string engine_name () {
+            return engine == null ? "" : ((!) engine).program;
+        }
+
         public string summary () {
             switch (availability) {
                 case Availability.CHECKING:
